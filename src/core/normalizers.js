@@ -127,7 +127,7 @@ function normalizeDeal(id, d = {}) {
     conversationId: text(d, ["conversationId", "waConversationId", "chatId", "whatsappConversationId"]) || null,
     updatedAt: toIso(d.updatedAt || d.lastActivityAt || d.createdAt),
     createdAt: toIso(d.createdAt),
-    lastContactAt: toIso(d.lastContactAt || d.lastContact || d.contactedAt || d.lastActivityAt),
+    lastContactAt: toIso(d.lastContactAt || d.lastContact || d.contactedAt || d.lastCustomerContactAt),
     lastRecontactAt: toIso(d.lastRecontactAt || d.recontactedAt || d.lastFollowUpAt || d.lastFollowupAt),
     isClosed: d.isClosed === true || d.closed === true || closedStages.has(stageNorm) || stageNorm.startsWith("GANADO ")
   };

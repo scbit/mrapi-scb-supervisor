@@ -1,30 +1,21 @@
 {
-  "snapshot": "SUPERVISOR_SCB_V3_MANUAL_ROADMAP1_CORE_0.1.0",
-  "product": "SUPERVISOR SCB V3",
+  "snapshot_version": "0.2.0",
+  "created_for": "SUPERVISOR SCB V3",
   "roadmap_id": "nFg3JnXtuzgKOn0Fvkz4",
   "roadmap": "ROADMAP 1 — CORE DE SUPERVISIÓN COMERCIAL",
-  "workspace_id": "workspace_scb",
   "project_id": "project_supervisor_scb_59e82cac",
+  "workspace_id": "workspace_scb",
   "repository_full_name": "scbit/mrapi-scb-supervisor",
   "repository_path": "C:/Users/Shadow/Documents/GitHub/mrapi-scb-supervisor",
   "default_branch": "main",
-  "planned_cloud_run": "mrapi-scb-supervisor",
-  "manual_continuation_reason": "MRAPI DEV ORCHESTRATOR under repair; preserve for later MRAPI verification and evidence reconciliation.",
-  "legacy_sources": {
-    "supervisor_legacy": {
-      "filename": "services_supervisor-mensaje_1786625067.881000 (1).zip",
-      "sha256": "9f427125fe53bce207181f91053e6a3d5378db3b4ffd536052bb8266a28931ae",
-      "bytes": 58576
-    },
-    "hunter_legacy": {
-      "filename": "services_scb-hunter-campo_1786677758.142000 (1).zip",
-      "sha256": "a33ece00b9c941c4bc1d163a5cf4483fe7971efb5a549cac874b241269a93217",
-      "bytes": 75949
-    }
+  "cloud_run": "mrapi-scb-supervisor",
+  "manual_milestone_coverage": {
+    "m2": "implemented_as_documented_inspection",
+    "m3": "implemented_as_reuse_adapt_replace_matrix",
+    "m4": "implemented_source_contracts",
+    "m5": "partial_identity_discovery"
   },
-  "tests": {
-    "node_test": "10 passed, 0 failed",
-    "production_data_accessed": false,
-    "deploy_performed": false
-  }
+  "deployment_performed_by_assistant": false,
+  "production_data_accessed": false,
+  "orchestrator_repository_modified": false
 }

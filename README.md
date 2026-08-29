@@ -77,3 +77,7 @@ Antes de producción leer:
 - `docs/PRODUCT_RULES_IMPLEMENTED.md`
 
 No se accedió a producción ni se hizo deploy durante la creación de este snapshot.
+
+
+## Snapshot 0.2.0
+Adds legacy inspection evidence, executable source contracts, seller identity discovery, stricter CRM recontact evidence, and enriched Hunter activity.

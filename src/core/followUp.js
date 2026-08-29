@@ -4,7 +4,7 @@ const { normalizeStage } = require("./normalizers");
 function hasRecontactAfterDue(deal) {
   const due = asDate(deal.dueDate);
   if (!due) return false;
-  const candidates = [deal.lastRecontactAt, deal.lastContactAt, deal.updatedAt]
+  const candidates = [deal.lastRecontactAt, deal.lastContactAt]
     .map(asDate)
     .filter(Boolean);
   return candidates.some(d => d.getTime() > due.getTime());
@@ -35,9 +35,10 @@ function evaluateSevereFollowUp(deal, config, asOf = new Date()) {
     lastContact: deal.lastContactAt || null,
     lastActivity: deal.updatedAt || null,
     recontacted,
+    recontactEvidence: deal.recontactEvidence || null,
     severe,
     reason: severe
-      ? `Trato vencido ${overdueDays} días, sin recontacto posterior al vencimiento y en etapa activa ${stage}.`
+      ? `Trato vencido ${overdueDays} días, sin recontacto explícito posterior al vencimiento y en etapa activa ${stage}.`
       : null
   };
 }

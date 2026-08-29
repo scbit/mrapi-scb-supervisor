@@ -62,6 +62,12 @@ class SupervisorEngine {
     });
 
     try {
+      const [crmUsers, hunterUsers] = await Promise.all([
+        this.crm.listUsers().catch(() => []),
+        this.hunter.listUsers().catch(() => [])
+      ]);
+      for (const user of crmUsers) this.identities.registerCrmUser(user);
+      for (const user of hunterUsers) this.identities.registerHunterUser(user);
       const conversations = await this.inbox.listChangedConversations({
         since,
         limit: cfg.incremental.max_conversations_per_run
@@ -173,6 +179,7 @@ class SupervisorEngine {
         clientsWaiting: sellers.reduce((a, s) => a + s.clientsWaiting, 0),
         severeFollowUpFailures: followUps.filter(x => x.severe).length,
         hunterManagements: hunterRows.length,
+        identityDirectorySize: this.identities.snapshot().length,
         nextConversationCursor: cursor ? cursor.toISOString() : previous
       };
 

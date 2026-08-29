@@ -1,4 +1,5 @@
 const express = require("express");
+const { publicContractSummary } = require("../contracts/sourceContracts");
 
 function createApp({ engine, databases, config }) {
   const app = express();
@@ -8,7 +9,7 @@ function createApp({ engine, databases, config }) {
     res.json({
       ok: true,
       service: "SUPERVISOR SCB V3",
-      version: "0.1.0",
+      version: "0.2.0",
       roadmap: "ROADMAP 1 — CORE DE SUPERVISIÓN COMERCIAL"
     });
   });
@@ -17,6 +18,7 @@ function createApp({ engine, databases, config }) {
     res.json({
       ok: true,
       service: "mrapi-scb-supervisor",
+      version: "0.2.0",
       databases: databases.ids,
       config: {
         timezone: config.timezone,
@@ -24,6 +26,14 @@ function createApp({ engine, databases, config }) {
         severeAfterDays: config.follow_up.severe_after_days
       }
     });
+  });
+
+  app.get("/api/core/contracts", (_req, res) => {
+    res.json({ ok: true, contracts: publicContractSummary() });
+  });
+
+  app.get("/api/core/identity", (_req, res) => {
+    res.json({ ok: true, sellers: engine.identities.snapshot() });
   });
 
   app.post("/api/core/run", async (req, res) => {
