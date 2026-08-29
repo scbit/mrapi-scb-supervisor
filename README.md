@@ -145,3 +145,8 @@ Abrir `/validate`, ingresar el TOKEN y presionar **Validar fuentes**. El navegad
 ## UI 0.5.3
 
 `/validate` ahora funciona como panel del Core con botones para validar fuentes, ver estado, vendedores, clientes esperando, fallas CRM, contratos y ejecutar el Core sin escribir URLs manualmente.
+
+
+## UI 0.5.4
+
+La raíz `/` ahora muestra un index simple con botón directo a `/validate` y acceso a `/health`. El JSON de identidad del servicio queda disponible en `/api`.

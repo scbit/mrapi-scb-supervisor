@@ -16,6 +16,10 @@ function createApp({ engine, databases, config }) {
   });
 
   app.get("/", (_req, res) => {
+    res.sendFile(path.join(__dirname, "../../public/index.html"));
+  });
+
+  app.get("/api", (_req, res) => {
     res.json({
       ok: true,
       service: "SUPERVISOR SCB V3",
