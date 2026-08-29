@@ -222,3 +222,14 @@ Fixes the Core runtime error `assignmentState is not defined` introduced by the
 bounded pending-assignment backfill. `assignmentState` is now explicitly imported
 from `conversationMetrics`. No business logic, read limits, checkpoints, or source
 queries were changed.
+
+## 0.6.0 — Roadmap 1 Core Hardening
+
+Read-efficiency hardening without increasing configured source limits:
+- Inbox now reads the derived state and compares a source metadata fingerprint before reading message subcollections.
+- Unchanged conversations skip message-history reads.
+- CRM now compares a source-only deal fingerprint before contact/note enrichment.
+- Legacy CRM states can short-circuit from unchanged `sourceUpdatedAt`, avoiding a one-time enrichment replay.
+- New observed read-efficiency diagnostics expose message fetches/docs and CRM pre-enrichment skips.
+- Existing CRM bootstrap checkpoint remains `crm_bootstrap_v2`; progress is not reset.
+- No automatic deploy and no source full scan were added.

@@ -117,7 +117,8 @@ class SupervisorEngine {
         return !email || !rosterExclude.has(email);
       });
 
-      // INBOX: changed conversations + fingerprint deduplication.
+      // INBOX: metadata-first deduplication. Message subcollections are only read when
+      // source conversation metadata changed (or when migrating a legacy state once).
       const inboxStartedMs = Date.now();
       const conversations = await this.inbox.listChangedConversations({
         since: inboxSince,
@@ -126,26 +127,62 @@ class SupervisorEngine {
       const analyzed = [];
       const sellerCache = new Map();
       let skippedUnchanged = 0;
+      let inboxMetadataSkips = 0;
+      let inboxMessageFetches = 0;
+      let inboxMessageDocsObserved = 0;
       for (const conversation of conversations) {
-        const messages = await this.inbox.getMessages(conversation.id, cfg.incremental.max_messages_per_conversation);
-        const fingerprint = messageFingerprint(conversation, messages);
         const previousState = await this.store.getConversationState(conversation.id);
+        const sourceMetadataFingerprint = stableFingerprint({
+          lastMessageAt: conversation.lastMessageAt || null,
+          owner: conversation.owner || null,
+          dealId: conversation.dealId || null,
+          contactId: conversation.contactId || null,
+          contactName: conversation.contactName || null,
+          phone: conversation.phone || null,
+          stage: conversation.stage || null,
+          sourceChannel: conversation.sourceChannel || null,
+          sourceOrigin: conversation.sourceOrigin || null,
+          adTitle: conversation.adTitle || null,
+          adText: conversation.adText || null,
+          adId: conversation.adId || null,
+          adLine: conversation.adLine || null
+        });
+        const legacyMetadataFingerprint = previousState?.metrics ? stableFingerprint({
+          lastMessageAt: previousState.sourceLastMessageAt || previousState.metrics.lastMessageAt || null,
+          owner: previousState.metrics.owner || null,
+          dealId: previousState.metrics.dealId || null,
+          contactId: previousState.metrics.contactId || null,
+          contactName: previousState.metrics.contactName || null,
+          phone: previousState.metrics.phone || null,
+          stage: previousState.metrics.stage || null,
+          sourceChannel: previousState.metrics.sourceChannel || null,
+          sourceOrigin: previousState.metrics.sourceOrigin || null,
+          adTitle: previousState.metrics.adTitle || null,
+          adText: previousState.metrics.adText || null,
+          adId: previousState.metrics.adId || null,
+          adLine: previousState.metrics.adLine || null
+        }) : null;
+        const metadataUnchanged = previousState?.metrics && (
+          previousState.sourceMetadataFingerprint === sourceMetadataFingerprint ||
+          (!previousState.sourceMetadataFingerprint && legacyMetadataFingerprint === sourceMetadataFingerprint)
+        );
+
+        if (metadataUnchanged) {
+          skippedUnchanged += 1;
+          inboxMetadataSkips += 1;
+          const cleaned = sanitizeWaitingMetric(previousState.metrics, cfg.response.terminal_courtesy_phrases || []);
+          analyzed.push(cleaned);
+          continue;
+        }
+
+        const messages = await this.inbox.getMessages(conversation.id, cfg.incremental.max_messages_per_conversation);
+        inboxMessageFetches += 1;
+        inboxMessageDocsObserved += messages.length;
+        const fingerprint = messageFingerprint(conversation, messages);
         if (previousState?.fingerprint === fingerprint) {
           skippedUnchanged += 1;
-          if (previousState.metrics) {
-            const cleaned = sanitizeWaitingMetric(previousState.metrics, cfg.response.terminal_courtesy_phrases || []);
-            analyzed.push(cleaned);
-            const activityDay = previousState.activityDay || localDateParts(
-              cleaned.lastMessageAt || conversation.lastMessageAt || now,
-              cfg.timezone
-            ).ymd;
-            await this.store.saveConversationState(conversation.id, {
-              activityDay,
-              sellerId: cleaned.seller?.id || previousState.seller?.id || null,
-              currentWaiting: cleaned.waitingForHuman === true,
-              metrics: cleaned
-            });
-          }
+          if (previousState.metrics) analyzed.push(sanitizeWaitingMetric(previousState.metrics, cfg.response.terminal_courtesy_phrases || []));
+          await this.store.saveConversationState(conversation.id, { sourceMetadataFingerprint });
           continue;
         }
         const seller = await this.resolveConversationSeller(conversation, messages, sellerCache);
@@ -160,6 +197,7 @@ class SupervisorEngine {
         const activityDay = localDateParts(metrics.lastMessageAt || conversation.lastMessageAt || now, cfg.timezone).ymd;
         await this.store.saveConversationState(conversation.id, {
           fingerprint,
+          sourceMetadataFingerprint,
           sourceLastMessageAt: conversation.lastMessageAt,
           activityDay,
           seller,
@@ -200,7 +238,34 @@ class SupervisorEngine {
       const changedFollowUps = [];
       let skippedDeals = 0;
       let crmEnrichedDeals = 0;
+      let crmSkippedBeforeEnrichment = 0;
+      let crmEnrichmentDocsObserved = 0;
       for (const dealRaw of deals) {
+        // The source fingerprint uses only fields already present on the deal document.
+        // If it is unchanged, skip BEFORE contact/note enrichment.
+        const sourceFingerprint = stableFingerprint({
+          stage: dealRaw.stageNorm,
+          dueDate: dealRaw.dueDate,
+          owner: dealRaw.owner,
+          contactId: dealRaw.contactId,
+          title: dealRaw.title,
+          lastContactAt: dealRaw.lastContactAt,
+          lastRecontactAt: dealRaw.lastRecontactAt,
+          updatedAt: dealRaw.updatedAt,
+          isClosed: dealRaw.isClosed
+        });
+        const previousState = await this.store.getDealState(dealRaw.id);
+        const sourceUnchanged = previousState && (
+          previousState.sourceFingerprint === sourceFingerprint ||
+          (!previousState.sourceFingerprint && previousState.evaluation &&
+            String(previousState.sourceUpdatedAt || '') === String(dealRaw.updatedAt || ''))
+        );
+        if (sourceUnchanged) {
+          skippedDeals += 1;
+          crmSkippedBeforeEnrichment += 1;
+          continue;
+        }
+
         const preliminary = evaluateSevereFollowUp(dealRaw, cfg, now);
         let deal = dealRaw;
         let evaluation = preliminary;
@@ -208,6 +273,7 @@ class SupervisorEngine {
           deal = await this.crm.enrichDealContact(dealRaw);
           evaluation = evaluateSevereFollowUp(deal, cfg, now);
           crmEnrichedDeals += 1;
+          crmEnrichmentDocsObserved += (deal.contact ? 1 : 0) + (deal.dealNotes?.length || 0);
         }
         const fingerprint = stableFingerprint({
           stage: deal.stageNorm,
@@ -219,12 +285,12 @@ class SupervisorEngine {
           severe: evaluation.severe,
           reason: evaluation.reason
         });
-        const previousState = await this.store.getDealState(deal.id);
         if (previousState?.fingerprint === fingerprint) {
           skippedDeals += 1;
+          await this.store.saveDealState(deal.id, { sourceFingerprint, sourceUpdatedAt: deal.updatedAt });
           continue;
         }
-        await this.store.saveDealState(deal.id, { fingerprint, sourceUpdatedAt: deal.updatedAt, evaluation });
+        await this.store.saveDealState(deal.id, { fingerprint, sourceFingerprint, sourceUpdatedAt: deal.updatedAt, evaluation });
         changedFollowUps.push(evaluation);
       }
       if (changedFollowUps.length) await this.store.replaceFollowUpFailures(changedFollowUps, runId);
@@ -490,6 +556,18 @@ class SupervisorEngine {
       if (crmMode === 'bootstrap' && crmBootstrapRemaining) {
         diagnostics.warnings.push('CRM_BOOTSTRAP_IN_PROGRESS');
       }
+      diagnostics.readEfficiency = {
+        inboxConversationDocsObserved: conversations.length,
+        inboxStateReads: conversations.length,
+        inboxMetadataSkips,
+        inboxMessageFetches,
+        inboxMessageDocsObserved,
+        crmDealDocsObserved: deals.length,
+        crmStateReads: deals.length,
+        crmSkippedBeforeEnrichment,
+        crmEnrichedDeals,
+        crmEnrichmentDocsObserved
+      };
 
       const summary = {
         runId,
@@ -507,6 +585,11 @@ class SupervisorEngine {
         crmBootstrapRemaining,
         crmBootstrapAfterId: crmBootstrapPage?.lastDocId || crmBootstrap?.afterId || null,
         crmEnrichedDeals,
+        crmSkippedBeforeEnrichment,
+        crmEnrichmentDocsObserved,
+        inboxMetadataSkips,
+        inboxMessageFetches,
+        inboxMessageDocsObserved,
         skippedUnchanged,
         processedDeals: deals.length,
         changedDealEvaluations: changedFollowUps.length,
