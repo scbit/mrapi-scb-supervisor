@@ -1,6 +1,6 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "private": true,
   "description": "SUPERVISOR SCB V3 - Roadmap 1 core de supervisión comercial",
   "main": "src/index.js",

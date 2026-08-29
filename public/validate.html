@@ -3,87 +3,119 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>SUPERVISOR SCB V3 — Validación</title>
+  <title>SUPERVISOR SCB V3 — Core</title>
   <style>
-    :root { font-family: Arial, Helvetica, sans-serif; color: #172033; background: #f5f7fb; }
-    * { box-sizing: border-box; }
-    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
-    .card { width: min(760px, 100%); background: white; border: 1px solid #dfe5ef; border-radius: 16px; padding: 28px; box-shadow: 0 10px 30px rgba(20,34,60,.08); }
-    h1 { margin: 0 0 6px; font-size: 24px; }
-    .sub { margin: 0 0 24px; color: #667085; }
-    label { display: block; font-weight: 700; margin-bottom: 8px; }
-    .row { display: flex; gap: 10px; }
-    input { flex: 1; min-width: 0; border: 1px solid #cfd6e4; border-radius: 10px; padding: 12px 14px; font-size: 16px; }
-    button { border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 700; cursor: pointer; background: #172033; color: white; }
-    button:disabled { opacity: .55; cursor: wait; }
-    .status { margin-top: 16px; font-size: 14px; color: #667085; }
-    pre { margin: 14px 0 0; padding: 16px; min-height: 120px; max-height: 430px; overflow: auto; border-radius: 12px; background: #0f172a; color: #e2e8f0; white-space: pre-wrap; word-break: break-word; }
-    .hint { margin-top: 16px; font-size: 13px; color: #667085; }
+    :root { font-family: Arial, Helvetica, sans-serif; color:#172033; background:#f5f7fb; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; padding:24px; }
+    .wrap { width:min(980px,100%); margin:0 auto; }
+    .card { background:#fff; border:1px solid #dfe5ef; border-radius:16px; padding:24px; box-shadow:0 10px 30px rgba(20,34,60,.08); }
+    h1 { margin:0 0 6px; font-size:26px; }
+    .sub { color:#667085; margin:0 0 22px; }
+    label { display:block; font-weight:700; margin-bottom:8px; }
+    .tokenRow { display:flex; gap:10px; margin-bottom:16px; }
+    input { flex:1; min-width:0; border:1px solid #cfd6e4; border-radius:10px; padding:12px 14px; font-size:16px; }
+    .buttons { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px; margin:16px 0; }
+    button { border:0; border-radius:10px; padding:12px 14px; font-weight:700; cursor:pointer; background:#172033; color:#fff; }
+    button.secondary { background:#eef2f7; color:#172033; border:1px solid #d9e0ea; }
+    button.run { background:#7a2e00; }
+    button:disabled { opacity:.55; cursor:wait; }
+    .status { margin-top:10px; font-size:14px; color:#667085; }
+    pre { margin:14px 0 0; padding:16px; min-height:180px; max-height:520px; overflow:auto; border-radius:12px; background:#0f172a; color:#e2e8f0; white-space:pre-wrap; word-break:break-word; }
+    .hint { margin-top:12px; font-size:13px; color:#667085; }
   </style>
 </head>
 <body>
-  <main class="card">
-    <h1>SUPERVISOR SCB V3</h1>
-    <p class="sub">Validación de fuentes del Core</p>
+  <main class="wrap">
+    <section class="card">
+      <h1>SUPERVISOR SCB V3</h1>
+      <p class="sub">Panel simple del Core — Roadmap 1</p>
 
-    <label for="token">TOKEN</label>
-    <div class="row">
-      <input id="token" type="password" autocomplete="off" placeholder="Ingresá el token">
-      <button id="validate">Validar fuentes</button>
-    </div>
+      <label for="token">TOKEN</label>
+      <div class="tokenRow">
+        <input id="token" type="password" autocomplete="off" placeholder="Ingresá el token">
+        <button id="showHide" class="secondary" type="button">Mostrar</button>
+      </div>
 
-    <div id="status" class="status">El token se usa solamente para esta llamada y no se guarda en el servidor.</div>
-    <pre id="result">Esperando validación…</pre>
-    <div class="hint">Fuentes esperadas: Bandeja/Inbox, CRM y Hunter.</div>
+      <div class="buttons">
+        <button data-action="validate">Validar fuentes</button>
+        <button data-action="status">Estado Core</button>
+        <button data-action="sellers">Vendedores</button>
+        <button data-action="waiting">Clientes esperando</button>
+        <button data-action="failures">Fallas CRM</button>
+        <button data-action="contracts" class="secondary">Contratos</button>
+        <button data-action="run" class="run">Ejecutar Core ahora</button>
+      </div>
+
+      <div id="status" class="status">Ingresá el TOKEN y elegí una acción. El token no se guarda en el servidor.</div>
+      <pre id="result">Esperando acción…</pre>
+      <div class="hint">“Ejecutar Core ahora” procesa las fuentes y persiste únicamente estado derivado/checkpoints de SUPERVISOR V3.</div>
+    </section>
   </main>
 
-  <script>
-    const tokenEl = document.getElementById("token");
-    const button = document.getElementById("validate");
-    const result = document.getElementById("result");
-    const status = document.getElementById("status");
+<script>
+  const tokenEl = document.getElementById("token");
+  const resultEl = document.getElementById("result");
+  const statusEl = document.getElementById("status");
+  const buttons = [...document.querySelectorAll("[data-action]")];
 
-    async function validateSources() {
-      const token = tokenEl.value.trim();
-      if (!token) {
-        status.textContent = "Ingresá un TOKEN.";
-        tokenEl.focus();
-        return;
-      }
+  document.getElementById("showHide").addEventListener("click", (e) => {
+    const show = tokenEl.type === "password";
+    tokenEl.type = show ? "text" : "password";
+    e.currentTarget.textContent = show ? "Ocultar" : "Mostrar";
+  });
 
-      button.disabled = true;
-      status.textContent = "Validando acceso a las fuentes…";
-      result.textContent = "Consultando…";
+  const actions = {
+    validate: { method: "GET", url: "/api/core/validate-sources", label: "Validando fuentes…" },
+    status: { method: "GET", url: "/api/core/status", label: "Consultando estado del Core…" },
+    sellers: { method: "GET", url: "/api/core/sellers", label: "Consultando vendedores…" },
+    waiting: { method: "GET", url: "/api/core/waiting", label: "Consultando clientes esperando…" },
+    failures: { method: "GET", url: "/api/core/follow-up-failures", label: "Consultando fallas CRM…" },
+    contracts: { method: "GET", url: "/api/core/contracts", label: "Consultando contratos…" },
+    run: { method: "POST", url: "/api/core/run", label: "Ejecutando Core…" }
+  };
 
-      try {
-        const response = await fetch("/api/core/validate-sources", {
-          method: "GET",
-          headers: { "x-supervisor-token": token }
-        });
-        const data = await response.json().catch(() => ({ ok: false, error: "INVALID_JSON_RESPONSE" }));
-        result.textContent = JSON.stringify(data, null, 2);
-
-        if (response.ok && data.ok) {
-          status.textContent = "Validación completada.";
-        } else if (data.error === "CORE_AUTH_NOT_CONFIGURED") {
-          status.textContent = "El TOKEN todavía no está configurado en Cloud Run.";
-        } else if (data.error === "UNAUTHORIZED") {
-          status.textContent = "TOKEN incorrecto.";
-        } else {
-          status.textContent = "La validación devolvió un error.";
-        }
-      } catch (error) {
-        status.textContent = "No se pudo conectar con el Core.";
-        result.textContent = JSON.stringify({ ok: false, error: error.message }, null, 2);
-      } finally {
-        button.disabled = false;
-      }
+  async function callAction(name) {
+    const token = tokenEl.value.trim();
+    if (!token) {
+      statusEl.textContent = "Ingresá un TOKEN.";
+      tokenEl.focus();
+      return;
     }
+    const action = actions[name];
+    if (!action) return;
 
-    button.addEventListener("click", validateSources);
-    tokenEl.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") validateSources();
-    });
-  </script>
+    if (name === "run" && !confirm("¿Ejecutar el Core ahora contra las fuentes configuradas?")) return;
+
+    buttons.forEach(b => b.disabled = true);
+    statusEl.textContent = action.label;
+    resultEl.textContent = "Consultando…";
+
+    try {
+      const response = await fetch(action.url, {
+        method: action.method,
+        headers: {
+          "x-supervisor-token": token,
+          "content-type": "application/json"
+        },
+        body: action.method === "POST" ? JSON.stringify({}) : undefined
+      });
+      const data = await response.json().catch(() => ({ ok:false, error:"INVALID_JSON_RESPONSE" }));
+      resultEl.textContent = JSON.stringify(data, null, 2);
+
+      if (response.ok && data.ok) statusEl.textContent = "OK — acción completada.";
+      else if (data.error === "CORE_AUTH_NOT_CONFIGURED") statusEl.textContent = "El TOKEN no está configurado en Cloud Run.";
+      else if (data.error === "UNAUTHORIZED") statusEl.textContent = "TOKEN incorrecto.";
+      else statusEl.textContent = "La acción devolvió un error.";
+    } catch (error) {
+      statusEl.textContent = "No se pudo conectar con el Core.";
+      resultEl.textContent = JSON.stringify({ ok:false, error:error.message }, null, 2);
+    } finally {
+      buttons.forEach(b => b.disabled = false);
+    }
+  }
+
+  buttons.forEach(button => button.addEventListener("click", () => callAction(button.dataset.action)));
+</script>
 </body>
 </html>

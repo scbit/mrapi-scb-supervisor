@@ -18,9 +18,9 @@
   ],
   "next": "0.5.0 hardening, integration suite, cost safeguards and Roadmap 1 validation",
   "orchestrator_reconnect_rule": "Inspect repository and tests first. Reconcile trusted evidence against this snapshot; do not reconstruct passing functionality.",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "status": "ROADMAP_1_RELEASE_CANDIDATE_MANUAL",
   "manual_progress_note": "Hardening, diagnostics, core API auth, timezone fixes, validation suite. Requires MRAPI trusted-evidence verification before Roadmap COMPLETE.",
   "roadmap1_validation_doc": "docs/ROADMAP1_VALIDATION.md",
-  "manual_addition": "Browser validation UI at /validate for token-authenticated source validation."
+  "manual_addition": "Core browser control panel at /validate with buttons for validation, status, sellers, waiting, CRM failures, contracts and controlled Core execution."
 }

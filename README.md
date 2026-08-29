@@ -140,3 +140,8 @@ Protected read-only endpoint: `GET /api/core/validate-sources`. Requires the sam
 ## Validación desde navegador
 
 Abrir `/validate`, ingresar el TOKEN y presionar **Validar fuentes**. El navegador envía el token como header `x-supervisor-token`; no se persiste en el servidor.
+
+
+## UI 0.5.3
+
+`/validate` ahora funciona como panel del Core con botones para validar fuentes, ver estado, vendedores, clientes esperando, fallas CRM, contratos y ejecutar el Core sin escribir URLs manualmente.
