@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Realtime Supervisor + Telegram + Bandeja operational semantics",
+  "description": "SUPERVISOR SCB V3 - Executive Telegram report + active deal portfolio per seller",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

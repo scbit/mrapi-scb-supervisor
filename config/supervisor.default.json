@@ -1,11 +1,98 @@
 {
-  "timezone":"America/Argentina/Buenos_Aires",
-  "business_hours":{"weekdays":[1,2,3,4,5],"start":"09:00","end":"17:00","lunch_grace_minutes":30},
-  "seller_activity":{"active_within_minutes":45},
-  "response":{"late_after_minutes":15,"terminal_courtesy_phrases":["gracias","muchas gracias","perfecto gracias","perfecto, gracias","ok gracias","ok, gracias","bueno gracias","bueno, gracias","listo gracias","listo, gracias","genial gracias","genial, gracias","okey gracias","okey, gracias","bueno","si si"]},
-  "follow_up":{"active_stages":["SEGUIMIENTO","MARCA PERSONAL","COTIZADO PARA ENVIAR","HORNO"],"inactive_stages":["DESCARTADO","PERDIDO"],"buckets_days":[15,30,60]},
-  "seller_identity":{"aliases":{}},
-  "incremental":{"lookback_minutes":120,"max_conversations_per_run":250,"max_messages_per_conversation":500,"max_deals_per_run":2000,"bootstrap_hours":24,"max_hunter_events_per_run":5000,"max_daily_conversation_states":5000,"max_current_conversation_states":5000},
-  "seller_roster":{"exclude_emails":["admin@scb.com","mrapi@mrapi.us","marketing@sentirecustomsbroker.com","hunter@sentirecustomsbroker.com","basura@sentirecustomsbroker.com","recupero@sentirecustomsbroker.com"]},
-  "assignment":{"pending_stages":["NUEVO","SIN ASIGNAR","NUEVO / SIN ASIGNAR"],"pending_if_no_owner":true,"alert_after_minutes":15}
+  "timezone": "America/Argentina/Buenos_Aires",
+  "business_hours": {
+    "weekdays": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "start": "09:00",
+    "end": "17:00",
+    "lunch_grace_minutes": 30
+  },
+  "seller_activity": {
+    "active_within_minutes": 45
+  },
+  "response": {
+    "late_after_minutes": 15,
+    "terminal_courtesy_phrases": [
+      "gracias",
+      "muchas gracias",
+      "perfecto gracias",
+      "perfecto, gracias",
+      "ok gracias",
+      "ok, gracias",
+      "bueno gracias",
+      "bueno, gracias",
+      "listo gracias",
+      "listo, gracias",
+      "genial gracias",
+      "genial, gracias",
+      "okey gracias",
+      "okey, gracias",
+      "bueno",
+      "si si"
+    ]
+  },
+  "follow_up": {
+    "active_stages": [
+      "SEGUIMIENTO",
+      "MARCA PERSONAL",
+      "COTIZADO PARA ENVIAR",
+      "HORNO"
+    ],
+    "inactive_stages": [
+      "DESCARTADO",
+      "PERDIDO"
+    ],
+    "buckets_days": [
+      15,
+      30,
+      60
+    ]
+  },
+  "seller_identity": {
+    "aliases": {}
+  },
+  "incremental": {
+    "lookback_minutes": 120,
+    "max_conversations_per_run": 250,
+    "max_messages_per_conversation": 500,
+    "max_deals_per_run": 2000,
+    "bootstrap_hours": 24,
+    "max_hunter_events_per_run": 5000,
+    "max_daily_conversation_states": 5000,
+    "max_current_conversation_states": 5000
+  },
+  "seller_roster": {
+    "exclude_emails": [
+      "admin@scb.com",
+      "mrapi@mrapi.us",
+      "marketing@sentirecustomsbroker.com",
+      "hunter@sentirecustomsbroker.com",
+      "basura@sentirecustomsbroker.com",
+      "recupero@sentirecustomsbroker.com"
+    ]
+  },
+  "assignment": {
+    "pending_stages": [
+      "NUEVO",
+      "SIN ASIGNAR",
+      "NUEVO / SIN ASIGNAR"
+    ],
+    "pending_if_no_owner": true,
+    "alert_after_minutes": 15
+  },
+  "portfolio": {
+    "active_stages": [
+      "SEGUIMIENTO",
+      "MARCA PERSONAL",
+      "PARA COTIZAR",
+      "COTIZADO PARA ENVIAR",
+      "HORNO",
+      "PENDIENTE DE PAGO"
+    ]
+  }
 }
