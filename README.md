@@ -170,3 +170,9 @@ La raíz `/` ahora muestra un index simple con botón directo a `/validate` y ac
 - Known technical/non-sales CRM accounts are excluded by exact configured email.
 - Seller labels prefer the CRM user's name.
 - Exact short courtesy endings include `Okey gracias`, `Bueno` and `Si si`.
+
+## 0.5.7 — startup hotfix
+
+- Fixes Cloud Run startup failure introduced in 0.5.6.
+- `FieldPath` is now imported from `@google-cloud/firestore`, which is the Firestore package actually declared by this service.
+- No business-rule or read-budget changes from 0.5.6.

@@ -1,5 +1,5 @@
 const { normalizeDeal, normalizeContact } = require('../core/normalizers');
-const { FieldPath } = require('firebase-admin/firestore');
+const { FieldPath } = require('@google-cloud/firestore');
 const { toIso, asDate } = require('../core/time');
 
 class CrmAdapter {
