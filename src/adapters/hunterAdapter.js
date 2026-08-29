@@ -1,13 +1,13 @@
-const { toIso } = require("../core/time");
+const { toIso } = require('../core/time');
 
 class HunterAdapter {
   constructor(db) {
     this.db = db;
     this.collections = {
-      prospects: "hunter_prospects",
-      notes: "hunter_notes",
-      tasks: "hunter_tasks",
-      users: "hunter_users"
+      prospects: 'hunter_prospects',
+      notes: 'hunter_notes',
+      tasks: 'hunter_tasks',
+      users: 'hunter_users'
     };
   }
 
@@ -17,9 +17,9 @@ class HunterAdapter {
       const row = d.data() || {};
       return {
         id: d.id,
-        name: String(row.name || row.displayName || row.userName || "").trim() || null,
-        email: String(row.email || row.mail || "").trim().toLowerCase() || null,
-        role: String(row.role || "seller").trim() || "seller",
+        name: String(row.name || row.displayName || row.userName || '').trim() || null,
+        email: String(row.email || row.mail || '').trim().toLowerCase() || null,
+        role: String(row.role || 'seller').trim() || 'seller',
         active: row.active !== false && row.disabled !== true
       };
     }).filter(x => x.active);
@@ -28,8 +28,8 @@ class HunterAdapter {
   async managementsForRange(start, endExclusive, limit = 5000) {
     let ref = this.db.collection(this.collections.notes);
     try {
-      ref = ref.where("createdAt", ">=", start.toISOString())
-        .where("createdAt", "<", endExclusive.toISOString());
+      ref = ref.where('createdAt', '>=', start.toISOString())
+        .where('createdAt', '<', endExclusive.toISOString()).orderBy('createdAt', 'asc');
       const snap = await ref.limit(limit).get();
       return snap.docs.map(d => ({ id: d.id, ...d.data() }));
     } catch (err) {
@@ -41,14 +41,18 @@ class HunterAdapter {
     }
   }
 
+  async listChangedManagements({ since, until = new Date(), limit = 5000 }) {
+    return this.managementsForRange(since, until, limit);
+  }
+
   aggregateBySeller(rows) {
     const map = new Map();
     for (const row of rows || []) {
-      const key = String(row.userId || row.userName || "unknown");
+      const key = String(row.userId || row.userName || 'unknown');
       if (!map.has(key)) {
         map.set(key, {
           rawSellerId: row.userId || null,
-          rawSellerName: row.userName || row.userId || "unknown",
+          rawSellerName: row.userName || row.userId || 'unknown',
           managements: 0,
           followUps: 0,
           taskCompletions: 0,
@@ -60,11 +64,11 @@ class HunterAdapter {
       const item = map.get(key);
       item.managements += 1;
       if (row.isFollowUp === true) item.followUps += 1;
-      if (row.taskCompleted === true || row.result === "tarea_completada") item.taskCompletions += 1;
-      if (row.result === "tarea_reprogramada") item.taskReschedules += 1;
-      const result = String(row.result || "sin_resultado");
+      if (row.taskCompleted === true || row.result === 'tarea_completada') item.taskCompletions += 1;
+      if (row.result === 'tarea_reprogramada') item.taskReschedules += 1;
+      const result = String(row.result || 'sin_resultado');
       item.results[result] = (item.results[result] || 0) + 1;
-      if (!item.lastActivityAt || String(row.createdAt || "") > item.lastActivityAt) {
+      if (!item.lastActivityAt || String(row.createdAt || '') > item.lastActivityAt) {
         item.lastActivityAt = toIso(row.createdAt) || row.createdAt || null;
       }
     }

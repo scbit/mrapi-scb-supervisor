@@ -1,7 +1,13 @@
 {
   "timezone": "America/Argentina/Buenos_Aires",
   "business_hours": {
-    "weekdays": [1, 2, 3, 4, 5],
+    "weekdays": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
     "start": "09:00",
     "end": "17:00",
     "lunch_grace_minutes": 30
@@ -32,6 +38,9 @@
     "lookback_minutes": 120,
     "max_conversations_per_run": 250,
     "max_messages_per_conversation": 500,
-    "max_deals_per_run": 1500
+    "max_deals_per_run": 1500,
+    "bootstrap_hours": 24,
+    "max_hunter_events_per_run": 5000,
+    "checkpoint_schema_version": 1
   }
 }

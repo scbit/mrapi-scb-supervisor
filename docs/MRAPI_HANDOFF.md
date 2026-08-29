@@ -37,3 +37,24 @@ When MRAPI DEV ORCHESTRATOR is healthy again:
 - Cross-source seller mapping still needs validation against real source users.
 - Exact production field used for reliable CRM recontact must be verified with controlled data.
 - No production data was accessed while creating this snapshot.
+
+## Manual continuation — v0.3.0
+
+While MRAPI DEV ORCHESTRATOR recovery/UI work is in progress, the Product Project advanced manually.
+When orchestration resumes, MRAPI must inspect the repository rather than recreating these changes.
+
+Implemented in v0.3.0:
+- per-source checkpoints (`inbox`, `crm`, `hunter`) plus a core checkpoint summary;
+- overlap/lookback and bounded bootstrap windows;
+- conversation/deal/Hunter event fingerprints;
+- derived deal state and Hunter event state;
+- active/inactive follow-up failure persistence so resolved alerts can be closed;
+- incremental CRM and Hunter adapter contracts;
+- execution summaries exposing source cursors and skip counts.
+
+Required MRAPI verification on resume:
+1. validate runtime binding to this product repository;
+2. inspect git state/current deployed version;
+3. run the full local test suite;
+4. validate real Firestore field/index compatibility before considering m6/m7 complete;
+5. preserve Roadmap ID and milestone IDs; do not create a replacement Roadmap merely because manual work occurred.

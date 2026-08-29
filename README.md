@@ -81,3 +81,17 @@ No se accedió a producción ni se hizo deploy durante la creación de este snap
 
 ## Snapshot 0.2.0
 Adds legacy inspection evidence, executable source contracts, seller identity discovery, stricter CRM recontact evidence, and enriched Hunter activity.
+
+## Snapshot 0.3.0
+
+Acelera Roadmap 1 incorporando infraestructura incremental por fuente:
+
+- checkpoints separados para Inbox, CRM y Hunter;
+- lookback configurable por fuente con bootstrap acotado;
+- deduplicación por fingerprint para conversations, deals y Hunter events;
+- persistencia derivada de estado CRM/Hunter;
+- cierre/reapertura correcta de alertas de follow-up mediante `active`;
+- agregación Hunter reconstruida desde estado derivado del día, no desde scans históricos;
+- resumen de ejecución con cursores y contadores por fuente.
+
+Este snapshot prepara el bloque siguiente (0.4.0), donde se consolidarán métricas integradas y agregación completa por vendedor.

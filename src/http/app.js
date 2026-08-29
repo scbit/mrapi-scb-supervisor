@@ -1,5 +1,6 @@
 const express = require("express");
 const { publicContractSummary } = require("../contracts/sourceContracts");
+const { version } = require("../../package.json");
 
 function createApp({ engine, databases, config }) {
   const app = express();
@@ -9,7 +10,7 @@ function createApp({ engine, databases, config }) {
     res.json({
       ok: true,
       service: "SUPERVISOR SCB V3",
-      version: "0.2.0",
+      version,
       roadmap: "ROADMAP 1 — CORE DE SUPERVISIÓN COMERCIAL"
     });
   });
@@ -18,7 +19,7 @@ function createApp({ engine, databases, config }) {
     res.json({
       ok: true,
       service: "mrapi-scb-supervisor",
-      version: "0.2.0",
+      version,
       databases: databases.ids,
       config: {
         timezone: config.timezone,

@@ -1,5 +1,5 @@
-const { normalizeDeal, normalizeContact } = require("../core/normalizers");
-const { toIso, asDate } = require("../core/time");
+const { normalizeDeal, normalizeContact } = require('../core/normalizers');
+const { toIso, asDate } = require('../core/time');
 
 class CrmAdapter {
   constructor(db, config) {
@@ -8,14 +8,14 @@ class CrmAdapter {
   }
 
   async listUsers(limit = 500) {
-    const snap = await this.db.collection("users").limit(Math.max(1, Number(limit || 500))).get();
+    const snap = await this.db.collection('users').limit(Math.max(1, Number(limit || 500))).get();
     return snap.docs.map(doc => {
       const d = doc.data() || {};
       return {
         id: doc.id,
-        name: String(d.name || d.displayName || "").trim() || null,
-        email: String(d.email || d.mail || "").trim().toLowerCase() || null,
-        role: String(d.role || "").trim() || null,
+        name: String(d.name || d.displayName || '').trim() || null,
+        email: String(d.email || d.mail || '').trim().toLowerCase() || null,
+        role: String(d.role || '').trim() || null,
         active: d.active !== false && d.disabled !== true
       };
     }).filter(x => x.active);
@@ -23,27 +23,27 @@ class CrmAdapter {
 
   async getDeal(id) {
     if (!id) return null;
-    const doc = await this.db.collection("deals").doc(String(id)).get();
+    const doc = await this.db.collection('deals').doc(String(id)).get();
     return doc.exists ? normalizeDeal(doc.id, doc.data()) : null;
   }
 
   async getContact(id) {
     if (!id) return null;
-    const doc = await this.db.collection("contacts").doc(String(id)).get();
+    const doc = await this.db.collection('contacts').doc(String(id)).get();
     return doc.exists ? normalizeContact(doc.id, doc.data()) : null;
   }
 
   async getDealNotes(dealId, limit = 20) {
     if (!dealId) return [];
     try {
-      const snap = await this.db.collection("deals").doc(String(dealId)).collection("notes")
-        .orderBy("createdAt", "desc").limit(Math.max(1, Number(limit || 20))).get();
+      const snap = await this.db.collection('deals').doc(String(dealId)).collection('notes')
+        .orderBy('createdAt', 'desc').limit(Math.max(1, Number(limit || 20))).get();
       return snap.docs.map(doc => {
         const d = doc.data() || {};
         return {
           id: doc.id,
-          note: String(d.note || d.text || d.body || d.content || "").trim(),
-          user: String(d.user || d.author || d.userEmail || d.createdBy || "").trim(),
+          note: String(d.note || d.text || d.body || d.content || '').trim(),
+          user: String(d.user || d.author || d.userEmail || d.createdBy || '').trim(),
           createdAt: toIso(d.createdAt || d.timestamp || d.date)
         };
       });
@@ -53,13 +53,13 @@ class CrmAdapter {
   }
 
   async findContactByPhone(phone) {
-    const raw = String(phone || "").trim();
+    const raw = String(phone || '').trim();
     if (!raw) return null;
-    const candidates = Array.from(new Set([raw, raw.replace(/[^\d+]/g, ""), raw.replace(/\D/g, "")].filter(Boolean)));
-    for (const field of ["phone", "whatsapp", "mobile", "phoneNumber", "waPhone"]) {
+    const candidates = Array.from(new Set([raw, raw.replace(/[^\d+]/g, ''), raw.replace(/\D/g, '')].filter(Boolean)));
+    for (const field of ['phone', 'whatsapp', 'mobile', 'phoneNumber', 'waPhone']) {
       for (const value of candidates) {
         try {
-          const snap = await this.db.collection("contacts").where(field, "==", value).limit(1).get();
+          const snap = await this.db.collection('contacts').where(field, '==', value).limit(1).get();
           if (!snap.empty) return normalizeContact(snap.docs[0].id, snap.docs[0].data());
         } catch (_) {}
       }
@@ -67,10 +67,23 @@ class CrmAdapter {
     return null;
   }
 
-  async listDeals(limit) {
+  async listChangedDeals({ since = null, limit = null } = {}) {
     const max = Math.max(1, Number(limit || this.config.incremental.max_deals_per_run || 1500));
-    const snap = await this.db.collection("deals").limit(max).get();
+    const base = this.db.collection('deals');
+    if (since) {
+      for (const field of ['updatedAt', 'lastActivityAt', 'modifiedAt']) {
+        try {
+          const snap = await base.where(field, '>=', since.toISOString()).orderBy(field, 'asc').limit(max).get();
+          return snap.docs.map(doc => normalizeDeal(doc.id, doc.data()));
+        } catch (_) {}
+      }
+    }
+    const snap = await base.limit(max).get();
     return snap.docs.map(doc => normalizeDeal(doc.id, doc.data()));
+  }
+
+  async listDeals(limit) {
+    return this.listChangedDeals({ limit });
   }
 
   async enrichDealContact(deal) {
@@ -86,8 +99,8 @@ class CrmAdapter {
       contact,
       dealNotes: notes,
       recontactEvidence: {
-        status: latestExplicit && due && latestExplicit > due ? "confirmed" : "not_confirmed",
-        method: latestExplicit ? "explicit_contact_timestamp" : "none",
+        status: latestExplicit && due && latestExplicit > due ? 'confirmed' : 'not_confirmed',
+        method: latestExplicit ? 'explicit_contact_timestamp' : 'none',
         timestamp: latestExplicit ? latestExplicit.toISOString() : null,
         noteCount: notes.length,
         genericNotesNotCountedAsRecontact: true

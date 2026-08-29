@@ -1,27 +1,33 @@
-const { FieldValue } = require("@google-cloud/firestore");
-
 class SupervisorStore {
   constructor(db) {
     this.db = db;
     this.collections = {
-      conversations: "supervisor_v3_conversation_state",
-      sellerDaily: "supervisor_v3_seller_daily",
-      followUp: "supervisor_v3_follow_up_failures",
-      checkpoints: "supervisor_v3_checkpoints",
-      runs: "supervisor_v3_runs"
+      conversations: 'supervisor_v3_conversation_state',
+      deals: 'supervisor_v3_deal_state',
+      hunterEvents: 'supervisor_v3_hunter_event_state',
+      sellerDaily: 'supervisor_v3_seller_daily',
+      followUp: 'supervisor_v3_follow_up_failures',
+      checkpoints: 'supervisor_v3_checkpoints',
+      runs: 'supervisor_v3_runs'
     };
   }
 
-  async getCheckpoint(id = "core") {
+  async getCheckpoint(id = 'core') {
     const doc = await this.db.collection(this.collections.checkpoints).doc(id).get();
     return doc.exists ? doc.data() : null;
   }
 
-  async saveCheckpoint(data, id = "core") {
+  async saveCheckpoint(data, id = 'core') {
     await this.db.collection(this.collections.checkpoints).doc(id).set({
       ...data,
       updatedAt: new Date().toISOString()
     }, { merge: true });
+  }
+
+  async getSourceCheckpoints() {
+    const ids = ['inbox', 'crm', 'hunter'];
+    const rows = await Promise.all(ids.map(async id => [id, await this.getCheckpoint(id)]));
+    return Object.fromEntries(rows);
   }
 
   async getConversationState(id) {
@@ -36,15 +42,62 @@ class SupervisorStore {
     }, { merge: true });
   }
 
+  async getDealState(id) {
+    const doc = await this.db.collection(this.collections.deals).doc(String(id)).get();
+    return doc.exists ? doc.data() : null;
+  }
+
+  async saveDealState(id, data) {
+    await this.db.collection(this.collections.deals).doc(String(id)).set({
+      ...data,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  }
+
+  async getHunterEventState(id) {
+    const doc = await this.db.collection(this.collections.hunterEvents).doc(String(id)).get();
+    return doc.exists ? doc.data() : null;
+  }
+
+  async saveHunterEventState(id, data) {
+    await this.db.collection(this.collections.hunterEvents).doc(String(id)).set({
+      ...data,
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+  }
+
+  async listHunterEventsForDay(dateYmd, limit = 10000) {
+    const snap = await this.db.collection(this.collections.hunterEvents)
+      .where('day', '==', String(dateYmd)).limit(Math.max(1, Number(limit || 10000))).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+
   async replaceFollowUpFailures(rows, runId) {
     const col = this.db.collection(this.collections.followUp);
-    const severe = (rows || []).filter(x => x.severe);
     const writer = this.db.bulkWriter();
-    for (const row of severe) {
-      writer.set(col.doc(String(row.dealId)), { ...row, runId, updatedAt: new Date().toISOString() }, { merge: true });
+    let count = 0;
+    for (const row of rows || []) {
+      const dealId = String(row.dealId);
+      writer.set(col.doc(dealId), {
+        ...row,
+        active: row.severe === true,
+        runId,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+      count += row.severe === true ? 1 : 0;
     }
     await writer.close();
-    return severe.length;
+    return count;
+  }
+
+  async listActiveFollowUpFailures(limit = 5000) {
+    try {
+      const snap = await this.db.collection(this.collections.followUp)
+        .where('active', '==', true).limit(Math.max(1, Number(limit || 5000))).get();
+      return snap.docs.map(doc => ({ dealId: doc.id, ...doc.data() }));
+    } catch (_) {
+      return [];
+    }
   }
 
   async saveSellerDaily(dateYmd, sellers, runId) {
@@ -64,7 +117,7 @@ class SupervisorStore {
   async startRun(runId, data) {
     await this.db.collection(this.collections.runs).doc(runId).set({
       ...data,
-      status: "RUNNING",
+      status: 'RUNNING',
       startedAt: new Date().toISOString()
     });
   }
@@ -72,14 +125,14 @@ class SupervisorStore {
   async finishRun(runId, data) {
     await this.db.collection(this.collections.runs).doc(runId).set({
       ...data,
-      status: "COMPLETE",
+      status: 'COMPLETE',
       finishedAt: new Date().toISOString()
     }, { merge: true });
   }
 
   async failRun(runId, error) {
     await this.db.collection(this.collections.runs).doc(runId).set({
-      status: "FAILED",
+      status: 'FAILED',
       error: String(error?.stack || error?.message || error),
       finishedAt: new Date().toISOString()
     }, { merge: true });
