@@ -135,3 +135,8 @@ El endpoint `/` y `/health` permanecen públicos y no exponen conversaciones ni 
 
 ### Functional source validation
 Protected read-only endpoint: `GET /api/core/validate-sources`. Requires the same Core API auth policy.
+
+
+## Validación desde navegador
+
+Abrir `/validate`, ingresar el TOKEN y presionar **Validar fuentes**. El navegador envía el token como header `x-supervisor-token`; no se persiste en el servidor.

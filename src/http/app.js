@@ -1,3 +1,4 @@
+const path = require("path");
 const express = require("express");
 const { publicContractSummary } = require("../contracts/sourceContracts");
 const { localDateParts } = require("../core/time");
@@ -9,6 +10,10 @@ function createApp({ engine, databases, config }) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
   const coreAuth = requireCoreAuth(process.env);
+
+  app.get("/validate", (_req, res) => {
+    res.sendFile(path.join(__dirname, "../../public/validate.html"));
+  });
 
   app.get("/", (_req, res) => {
     res.json({

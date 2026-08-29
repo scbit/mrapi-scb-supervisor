@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SUPERVISOR SCB V3 — Validación</title>
+  <style>
+    :root { font-family: Arial, Helvetica, sans-serif; color: #172033; background: #f5f7fb; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; }
+    .card { width: min(760px, 100%); background: white; border: 1px solid #dfe5ef; border-radius: 16px; padding: 28px; box-shadow: 0 10px 30px rgba(20,34,60,.08); }
+    h1 { margin: 0 0 6px; font-size: 24px; }
+    .sub { margin: 0 0 24px; color: #667085; }
+    label { display: block; font-weight: 700; margin-bottom: 8px; }
+    .row { display: flex; gap: 10px; }
+    input { flex: 1; min-width: 0; border: 1px solid #cfd6e4; border-radius: 10px; padding: 12px 14px; font-size: 16px; }
+    button { border: 0; border-radius: 10px; padding: 12px 18px; font-weight: 700; cursor: pointer; background: #172033; color: white; }
+    button:disabled { opacity: .55; cursor: wait; }
+    .status { margin-top: 16px; font-size: 14px; color: #667085; }
+    pre { margin: 14px 0 0; padding: 16px; min-height: 120px; max-height: 430px; overflow: auto; border-radius: 12px; background: #0f172a; color: #e2e8f0; white-space: pre-wrap; word-break: break-word; }
+    .hint { margin-top: 16px; font-size: 13px; color: #667085; }
+  </style>
+</head>
+<body>
+  <main class="card">
+    <h1>SUPERVISOR SCB V3</h1>
+    <p class="sub">Validación de fuentes del Core</p>
+
+    <label for="token">TOKEN</label>
+    <div class="row">
+      <input id="token" type="password" autocomplete="off" placeholder="Ingresá el token">
+      <button id="validate">Validar fuentes</button>
+    </div>
+
+    <div id="status" class="status">El token se usa solamente para esta llamada y no se guarda en el servidor.</div>
+    <pre id="result">Esperando validación…</pre>
+    <div class="hint">Fuentes esperadas: Bandeja/Inbox, CRM y Hunter.</div>
+  </main>
+
+  <script>
+    const tokenEl = document.getElementById("token");
+    const button = document.getElementById("validate");
+    const result = document.getElementById("result");
+    const status = document.getElementById("status");
+
+    async function validateSources() {
+      const token = tokenEl.value.trim();
+      if (!token) {
+        status.textContent = "Ingresá un TOKEN.";
+        tokenEl.focus();
+        return;
+      }
+
+      button.disabled = true;
+      status.textContent = "Validando acceso a las fuentes…";
+      result.textContent = "Consultando…";
+
+      try {
+        const response = await fetch("/api/core/validate-sources", {
+          method: "GET",
+          headers: { "x-supervisor-token": token }
+        });
+        const data = await response.json().catch(() => ({ ok: false, error: "INVALID_JSON_RESPONSE" }));
+        result.textContent = JSON.stringify(data, null, 2);
+
+        if (response.ok && data.ok) {
+          status.textContent = "Validación completada.";
+        } else if (data.error === "CORE_AUTH_NOT_CONFIGURED") {
+          status.textContent = "El TOKEN todavía no está configurado en Cloud Run.";
+        } else if (data.error === "UNAUTHORIZED") {
+          status.textContent = "TOKEN incorrecto.";
+        } else {
+          status.textContent = "La validación devolvió un error.";
+        }
+      } catch (error) {
+        status.textContent = "No se pudo conectar con el Core.";
+        result.textContent = JSON.stringify({ ok: false, error: error.message }, null, 2);
+      } finally {
+        button.disabled = false;
+      }
+    }
+
+    button.addEventListener("click", validateSources);
+    tokenEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") validateSources();
+    });
+  </script>
+</body>
+</html>
