@@ -41,8 +41,9 @@
         <button data-action="validate">Validar fuentes</button>
         <button data-action="status">Estado Core</button>
         <button data-action="sellers">Vendedores</button>
-        <button data-action="waiting">Clientes esperando</button>
+        <button data-action="waiting">Clientes esperando ahora</button>
         <button data-action="failures">Fallas CRM</button>
+        <button data-action="identity" class="secondary">Identidad vendedores</button>
         <button data-action="contracts" class="secondary">Contratos</button>
         <button data-action="run" class="run">Ejecutar Core ahora</button>
       </div>
@@ -71,6 +72,7 @@
     sellers: { method: "GET", url: "/api/core/sellers", label: "Consultando vendedores…" },
     waiting: { method: "GET", url: "/api/core/waiting", label: "Consultando clientes esperando…" },
     failures: { method: "GET", url: "/api/core/follow-up-failures", label: "Consultando fallas CRM…" },
+    identity: { method: "GET", url: "/api/core/identity", label: "Consultando identidad de vendedores…" },
     contracts: { method: "GET", url: "/api/core/contracts", label: "Consultando contratos…" },
     run: { method: "POST", url: "/api/core/run", label: "Ejecutando Core…" }
   };

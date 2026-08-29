@@ -46,6 +46,23 @@ class SupervisorStore {
     }
   }
 
+  async listConversationStates(limit = 5000) {
+    const snap = await this.db.collection(this.collections.conversations)
+      .limit(Math.max(1, Number(limit || 5000))).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+
+  async listCurrentWaitingConversationStates(limit = 5000) {
+    try {
+      const snap = await this.db.collection(this.collections.conversations)
+        .where('currentWaiting', '==', true)
+        .limit(Math.max(1, Number(limit || 5000))).get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (_) {
+      return [];
+    }
+  }
+
   async getDealState(id) {
     const doc = await this.db.collection(this.collections.deals).doc(String(id)).get();
     return doc.exists ? doc.data() : null;
@@ -113,8 +130,8 @@ class SupervisorStore {
     return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
   }
 
-  async listWaitingConversations(dateYmd, limit = 500) {
-    const states = await this.listConversationStatesForDay(dateYmd, Math.max(limit * 5, 1000));
+  async listWaitingConversations(_dateYmd, limit = 500) {
+    const states = await this.listCurrentWaitingConversationStates(Math.max(limit * 5, 1000));
     return states.map(x => x.metrics).filter(x => x?.waitingForHuman)
       .sort((a, b) => Number(b.waitingMinutes || 0) - Number(a.waitingMinutes || 0)).slice(0, limit);
   }

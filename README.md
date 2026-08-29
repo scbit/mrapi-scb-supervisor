@@ -150,3 +150,12 @@ Abrir `/validate`, ingresar el TOKEN y presionar **Validar fuentes**. El navegad
 ## UI 0.5.4
 
 La raíz `/` ahora muestra un index simple con botón directo a `/validate` y acceso a `/health`. El JSON de identidad del servicio queda disponible en `/api`.
+
+## 0.5.5 — functional validation fixes
+
+- CRM first bootstrap reads bounded real `deals`; incremental timestamp queries use Firestore Date first.
+- Active CRM users are the canonical seller roster.
+- Current waiting state survives midnight; daily activity remains daily.
+- One-time migration indexes existing SUPERVISOR derived conversation states (not source history).
+- Exact/short courtesy closings such as `Gracias` stop generating a waiting-client alert.
+- Unassigned conversations are kept out of seller rankings and counted separately in run summary.

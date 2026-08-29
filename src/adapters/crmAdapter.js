@@ -70,14 +70,23 @@ class CrmAdapter {
   async listChangedDeals({ since = null, limit = null } = {}) {
     const max = Math.max(1, Number(limit || this.config.incremental.max_deals_per_run || 1500));
     const base = this.db.collection('deals');
+
     if (since) {
+      // Firestore legacy data commonly stores timestamps as Timestamp/Date, not ISO strings.
+      // Query Date first. ISO fallback remains for deployments that persisted strings.
       for (const field of ['updatedAt', 'lastActivityAt', 'modifiedAt']) {
-        try {
-          const snap = await base.where(field, '>=', since.toISOString()).orderBy(field, 'asc').limit(max).get();
-          return snap.docs.map(doc => normalizeDeal(doc.id, doc.data()));
-        } catch (_) {}
+        for (const value of [since, since.toISOString()]) {
+          try {
+            const snap = await base.where(field, '>=', value).orderBy(field, 'asc').limit(max).get();
+            if (!snap.empty) return snap.docs.map(doc => normalizeDeal(doc.id, doc.data()));
+          } catch (_) {}
+        }
       }
+      return [];
     }
+
+    // First CRM bootstrap: bounded full collection read. The engine only uses this path
+    // while no CRM checkpoint exists.
     const snap = await base.limit(max).get();
     return snap.docs.map(doc => normalizeDeal(doc.id, doc.data()));
   }

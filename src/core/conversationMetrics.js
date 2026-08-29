@@ -1,6 +1,36 @@
 const crypto = require("crypto");
 const { asDate, minutesBetween } = require("./time");
 
+function normalizeCourtesyText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[!¡?¿.,;:]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isTerminalCourtesy(value, phrases = []) {
+  const normalized = normalizeCourtesyText(value);
+  if (!normalized) return false;
+  const configured = new Set((phrases || []).map(normalizeCourtesyText).filter(Boolean));
+  return configured.has(normalized);
+}
+
+function sanitizeWaitingMetric(metrics, phrases = []) {
+  if (!metrics || !metrics.waitingForHuman) return metrics;
+  if (!isTerminalCourtesy(metrics.waitingCustomerText, phrases)) return metrics;
+  return {
+    ...metrics,
+    waitingForHuman: false,
+    waitingSince: null,
+    waitingMinutes: null,
+    waitingClosedByRule: "terminal_courtesy"
+  };
+}
+
 function messageFingerprint(conversation, messages) {
   const payload = {
     conversationId: conversation.id,
@@ -58,6 +88,12 @@ function analyzeConversation(conversation, messages, options = {}) {
     waitingMessage = pendingInbound;
   }
 
+  if (pendingInbound && isTerminalCourtesy(pendingInbound.text, options.terminalCourtesyPhrases || [])) {
+    waitingSince = null;
+    waitingMessage = null;
+    pendingInbound = null;
+  }
+
   const last = events.at(-1) || null;
   const lastInbound = [...inbound].reverse()[0] || null;
   const lastHuman = [...humanOutbound].reverse()[0] || null;
@@ -106,4 +142,4 @@ function analyzeConversation(conversation, messages, options = {}) {
   };
 }
 
-module.exports = { analyzeConversation, messageFingerprint };
+module.exports = { analyzeConversation, messageFingerprint, isTerminalCourtesy, sanitizeWaitingMetric };

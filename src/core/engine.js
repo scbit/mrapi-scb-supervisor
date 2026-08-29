@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { analyzeConversation, messageFingerprint } = require('./conversationMetrics');
+const { analyzeConversation, messageFingerprint, sanitizeWaitingMetric } = require('./conversationMetrics');
 const { evaluateSevereFollowUp } = require('./followUp');
 const { aggregateSeller } = require('./aggregate');
 const { SellerIdentityResolver } = require('./sellerIdentity');
@@ -96,21 +96,26 @@ class SupervisorEngine {
         const previousState = await this.store.getConversationState(conversation.id);
         if (previousState?.fingerprint === fingerprint) {
           skippedUnchanged += 1;
-          if (previousState.metrics) analyzed.push(previousState.metrics);
-          // v0.4 backfill: older derived states did not persist activityDay. Add it without
-          // re-running conversation analysis so the daily aggregate is complete immediately.
-          if (!previousState.activityDay && previousState.metrics) {
-            const activityDay = localDateParts(
-              previousState.metrics.lastMessageAt || conversation.lastMessageAt || now,
+          if (previousState.metrics) {
+            const cleaned = sanitizeWaitingMetric(previousState.metrics, cfg.response.terminal_courtesy_phrases || []);
+            analyzed.push(cleaned);
+            const activityDay = previousState.activityDay || localDateParts(
+              cleaned.lastMessageAt || conversation.lastMessageAt || now,
               cfg.timezone
             ).ymd;
-            await this.store.saveConversationState(conversation.id, { activityDay });
+            await this.store.saveConversationState(conversation.id, {
+              activityDay,
+              sellerId: cleaned.seller?.id || previousState.seller?.id || null,
+              currentWaiting: cleaned.waitingForHuman === true,
+              metrics: cleaned
+            });
           }
           continue;
         }
         const seller = await this.resolveConversationSeller(conversation, messages, sellerCache);
         const metrics = analyzeConversation(conversation, messages, {
           lateAfterMinutes: cfg.response.late_after_minutes,
+          terminalCourtesyPhrases: cfg.response.terminal_courtesy_phrases || [],
           now
         });
         metrics.seller = seller;
@@ -120,6 +125,8 @@ class SupervisorEngine {
           sourceLastMessageAt: conversation.lastMessageAt,
           activityDay,
           seller,
+          sellerId: seller.id,
+          currentWaiting: metrics.waitingForHuman === true,
           metrics
         });
         analyzed.push(metrics);
@@ -130,7 +137,7 @@ class SupervisorEngine {
 
       // CRM: only deals changed within the source window when the schema supports it.
       const crmStartedMs = Date.now();
-      const deals = await this.crm.listChangedDeals({ since: crmSince, limit: cfg.incremental.max_deals_per_run });
+      const deals = await this.crm.listChangedDeals({ since: crmCursor ? crmSince : null, limit: cfg.incremental.max_deals_per_run });
       const changedFollowUps = [];
       let skippedDeals = 0;
       for (const dealRaw of deals) {
@@ -155,7 +162,10 @@ class SupervisorEngine {
         changedFollowUps.push(evaluation);
       }
       if (changedFollowUps.length) await this.store.replaceFollowUpFailures(changedFollowUps, runId);
-      const nextCrmCursor = advanceCursor(crmCursor, deals.map(x => x.updatedAt));
+      let nextCrmCursor = advanceCursor(crmCursor, deals.map(x => x.updatedAt));
+      if (!crmCursor && deals.length < Number(cfg.incremental.max_deals_per_run)) {
+        nextCrmCursor = nextCrmCursor || now.toISOString();
+      }
       if (nextCrmCursor) await this.store.saveCheckpoint({ cursor: nextCrmCursor, lastRunId: runId }, 'crm');
       const followUps = await this.store.listActiveFollowUpFailures();
       const crmDurationMs = Date.now() - crmStartedMs;
@@ -190,6 +200,28 @@ class SupervisorEngine {
       const hunterRaw = this.hunter.aggregateBySeller(hunterRows);
       const hunterDurationMs = Date.now() - hunterStartedMs;
 
+      // One-time derived-state index migration. This scans only SUPERVISOR's own derived
+      // conversation state (not the 20k source conversations) and makes current waits queryable
+      // across day boundaries.
+      const currentIndexCheckpoint = await this.store.getCheckpoint('conversation_current_index_v1');
+      if (!currentIndexCheckpoint?.complete) {
+        const legacyStates = await this.store.listConversationStates(Number(cfg.incremental.max_current_conversation_states || 5000));
+        for (const state of legacyStates) {
+          if (!state.metrics) continue;
+          const cleaned = sanitizeWaitingMetric(state.metrics, cfg.response.terminal_courtesy_phrases || []);
+          await this.store.saveConversationState(state.id, {
+            sellerId: cleaned.seller?.id || state.seller?.id || null,
+            currentWaiting: cleaned.waitingForHuman === true,
+            metrics: cleaned
+          });
+        }
+        await this.store.saveCheckpoint({
+          complete: true,
+          indexed: legacyStates.length,
+          lastRunId: runId
+        }, 'conversation_current_index_v1');
+      }
+
       // Daily aggregation must use the complete persisted current-day state, not only the
       // conversations returned by this incremental window. Otherwise unchanged conversations
       // would disappear from the daily seller metrics on later runs.
@@ -197,10 +229,42 @@ class SupervisorEngine {
         day.ymd,
         Math.max(Number(cfg.incremental.max_daily_conversation_states || 5000), conversations.length * 2)
       );
-      const dailyConversationMetrics = persistedConversationStates.map(x => x.metrics).filter(Boolean);
+      const dailyConversationMetrics = persistedConversationStates
+        .map(x => x.metrics)
+        .filter(Boolean)
+        .map(x => sanitizeWaitingMetric(x, cfg.response.terminal_courtesy_phrases || []));
+
+      const currentWaitingStates = await this.store.listCurrentWaitingConversationStates(
+        Number(cfg.incremental.max_current_conversation_states || 5000)
+      );
+      const currentWaitingMetrics = currentWaitingStates
+        .map(x => x.metrics)
+        .filter(Boolean)
+        .map(x => sanitizeWaitingMetric(x, cfg.response.terminal_courtesy_phrases || []))
+        .filter(x => x.waitingForHuman);
+
+      const dailyIds = new Set(dailyConversationMetrics.map(x => x.conversationId));
+      const carriedWaits = currentWaitingMetrics
+        .filter(x => !dailyIds.has(x.conversationId))
+        .map(x => ({
+          ...x,
+          carriedWaitingOnly: true,
+          inboundCount: 0,
+          humanOutboundCount: 0,
+          outboundCount: 0,
+          botOutboundCount: 0,
+          responsesCount: 0,
+          responseMinutesTotal: 0,
+          responseMinutes: [],
+          lateCount: 0,
+          lateResponses: [],
+          lastSellerActivityAt: null
+        }));
+
       const convBySeller = new Map();
-      for (const row of dailyConversationMetrics) {
+      for (const row of [...dailyConversationMetrics, ...carriedWaits]) {
         const seller = row.seller || this.identities.resolve(row.owner || 'unknown');
+        if (seller.id === 'unknown') continue; // keep unassigned work out of seller rankings
         if (!convBySeller.has(seller.id)) convBySeller.set(seller.id, { seller, rows: [] });
         convBySeller.get(seller.id).rows.push(row);
       }
@@ -218,10 +282,20 @@ class SupervisorEngine {
         followBySeller.get(seller.id).rows.push(f);
       }
 
-      const sellerIds = new Set([...convBySeller.keys(), ...hunterBySeller.keys(), ...followBySeller.keys()]);
+      const crmSellerDirectory = crmUsers.map(user => this.identities.resolve(user.email, user.id, user.name));
+      const sellerIds = new Set([
+        ...crmSellerDirectory.map(x => x.id),
+        ...convBySeller.keys(),
+        ...hunterBySeller.keys(),
+        ...followBySeller.keys()
+      ]);
       const sellers = [];
       for (const id of sellerIds) {
-        const seller = convBySeller.get(id)?.seller || hunterBySeller.get(id)?.seller || followBySeller.get(id)?.seller || this.identities.resolve(id);
+        const seller = crmSellerDirectory.find(x => x.id === id)
+          || convBySeller.get(id)?.seller
+          || hunterBySeller.get(id)?.seller
+          || followBySeller.get(id)?.seller
+          || this.identities.resolve(id);
         sellers.push(aggregateSeller({
           seller,
           conversations: convBySeller.get(id)?.rows || [],
@@ -271,6 +345,8 @@ class SupervisorEngine {
         processedConversations: conversations.length,
         analyzedConversations: analyzed.length,
         persistedConversationsToday: dailyConversationMetrics.length,
+        currentWaitingConversations: currentWaitingMetrics.length,
+        unassignedWaitingConversations: currentWaitingMetrics.filter(x => (x.seller?.id || 'unknown') === 'unknown').length,
         skippedUnchanged,
         processedDeals: deals.length,
         changedDealEvaluations: changedFollowUps.length,

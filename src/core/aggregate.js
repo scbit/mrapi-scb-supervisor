@@ -14,15 +14,16 @@ function percentile(values, p) {
 
 function aggregateSeller({ seller, conversations = [], hunter = null, followUps = [], config, now = new Date() }) {
   const waits = conversations.filter(c => c.waitingForHuman);
-  const responseTimes = conversations.flatMap(c => Array.isArray(c.responseMinutes) ? c.responseMinutes : []);
-  const fallbackTotal = conversations.reduce((sum, c) => sum + Number(c.responseMinutesTotal || 0), 0);
-  const fallbackCount = conversations.reduce((sum, c) => sum + Number(c.responsesCount || 0), 0);
+  const activityConversations = conversations.filter(c => c.carriedWaitingOnly !== true);
+  const responseTimes = activityConversations.flatMap(c => Array.isArray(c.responseMinutes) ? c.responseMinutes : []);
+  const fallbackTotal = activityConversations.reduce((sum, c) => sum + Number(c.responseMinutesTotal || 0), 0);
+  const fallbackCount = activityConversations.reduce((sum, c) => sum + Number(c.responsesCount || 0), 0);
   const responseTotal = responseTimes.length ? responseTimes.reduce((a, b) => a + b, 0) : fallbackTotal;
   const responseCount = responseTimes.length || fallbackCount;
   const avgResponseMinutes = responseCount ? Math.round(responseTotal / responseCount) : null;
 
   const lastActivity = latestIso([
-    ...conversations.map(c => c.lastSellerActivityAt),
+    ...activityConversations.map(c => c.lastSellerActivityAt),
     hunter?.lastActivityAt
   ]);
 
@@ -56,18 +57,18 @@ function aggregateSeller({ seller, conversations = [], hunter = null, followUps 
     activityState: active ? "active" : "inactive",
     inactivityIsAlert: false,
     businessHoursNow: insideHours,
-    conversationsTotal: conversations.length,
-    conversationsAttended: conversations.filter(c => c.humanOutboundCount > 0).length,
-    conversationsInProgress: conversations.filter(c => c.inboundCount > 0 && c.humanOutboundCount > 0 && !c.waitingForHuman).length,
+    conversationsTotal: activityConversations.length,
+    conversationsAttended: activityConversations.filter(c => c.humanOutboundCount > 0).length,
+    conversationsInProgress: activityConversations.filter(c => c.inboundCount > 0 && c.humanOutboundCount > 0 && !c.waitingForHuman).length,
     clientsWaiting: waits.length,
     maxWaitingMinutes: waits.length ? Math.max(...waits.map(x => x.waitingMinutes || 0)) : 0,
     waitingCases,
-    responsesSent: conversations.reduce((sum, c) => sum + (c.humanOutboundCount || 0), 0),
+    responsesSent: activityConversations.reduce((sum, c) => sum + (c.humanOutboundCount || 0), 0),
     responsesMeasured: responseCount,
     avgResponseMinutes,
     p95ResponseMinutes: percentile(responseTimes, 95),
     maxResponseMinutes: responseTimes.length ? Math.max(...responseTimes) : null,
-    lateResponses: conversations.reduce((sum, c) => sum + (c.lateCount || 0), 0),
+    lateResponses: activityConversations.reduce((sum, c) => sum + (c.lateCount || 0), 0),
     hunter: hunter || {
       managements: 0,
       followUps: 0,

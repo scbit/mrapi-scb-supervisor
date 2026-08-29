@@ -16,7 +16,21 @@
     "active_within_minutes": 45
   },
   "response": {
-    "late_after_minutes": 15
+    "late_after_minutes": 15,
+    "terminal_courtesy_phrases": [
+      "gracias",
+      "muchas gracias",
+      "perfecto gracias",
+      "perfecto, gracias",
+      "ok gracias",
+      "ok, gracias",
+      "bueno gracias",
+      "bueno, gracias",
+      "listo gracias",
+      "listo, gracias",
+      "genial gracias",
+      "genial, gracias"
+    ]
   },
   "follow_up": {
     "severe_after_days": 7,
@@ -42,6 +56,7 @@
     "bootstrap_hours": 24,
     "max_hunter_events_per_run": 5000,
     "checkpoint_schema_version": 1,
-    "max_daily_conversation_states": 5000
+    "max_daily_conversation_states": 5000,
+    "max_current_conversation_states": 5000
   }
 }
