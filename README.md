@@ -1,37 +1,20 @@
-# SUPERVISOR SCB V3 — 0.7.0
+# SUPERVISOR SCB V3 — 0.7.2
 
-Realtime Supervisor + Telegram.
+Hotfix de semántica operativa de Bandeja/Core sobre la base 0.7.1.
 
-## Seguridad de datos
-Las fuentes `bsscb`, `bscrmscb` y `scb-hunter-bd` son solo lectura. Toda escritura del producto va a `SUPERVISOR_DATABASE_ID`, que debe ser una BD distinta (prevista: `supervisor-scb`). El servicio falla al iniciar si falta esta variable o si coincide con una fuente.
+## Cambios
 
-## Variables
-- `INBOX_DATABASE_ID=bsscb`
-- `CRM_DATABASE_ID=bscrmscb`
-- `HUNTER_DATABASE_ID=scb-hunter-bd`
-- `SUPERVISOR_DATABASE_ID=supervisor-scb` (obligatoria)
-- `SUPERVISOR_API_TOKEN` (secret)
-- `TELEGRAM_BOT_TOKEN` (secret)
-- `TELEGRAM_CHAT_ID`
+- `CUSTOMER_WAITING` usa primero la metadata operativa real de Bandeja/Core: `hasUnread`, `unreadCount`, `lastCustomerMessageAt`, `lastHumanMessageAt`, `lastMessageDirection` y `manualReadAt`.
+- Un `manualReadAt` posterior al inbound cierra la espera.
+- `Nuevo / Sin asignar` sigue la semántica de CORE: conversación sin `dealId`.
+- Inbox incremental usa `updatedAt` como cursor primario para observar también manual-read, vínculo CRM y otros cambios que no alteran `lastMessageAt`.
+- Migración única `conversation_unread_semantics_v072`: refresca solo los estados derivados que Supervisor ya tenía marcados como esperando, mediante lectura puntual del documento de conversación. No hace scan de Bandeja.
+- El tiempo de espera se recalcula al momento del reporte para que siga avanzando sin releer mensajes.
 
-## Endpoints
-- `GET /health`
-- `GET /api/core/validate-sources`
-- `GET /api/core/status`
-- `POST /api/core/run`
-- `GET /api/supervisor/report`
-- `POST /api/supervisor/report/send`
+## Seguridad
 
-## CRM
-La carga inicial crea un snapshot liviano de `deals` por páginas. No genera eventos históricos. Cuando termina, el CRM opera incrementalmente.
+Fuentes `bsscb`, `bscrmscb` y `scb-hunter-bd`: READ ONLY. Única persistencia: `supervisor-scb`.
 
-Seguimiento solo para: Seguimiento, Marca personal, Cotizado para enviar y Horno. Buckets: DUE, +15, +30, +60.
+## Deploy
 
-## Eventos
-HORNO, GANADO, GANADO_FROM_AD. Se generan solo por transición posterior al snapshot inicial.
-
-## Hunter
-El KPI principal es GESTIONES: últimos 30 minutos y acumulado del día.
-
-## Scheduler
-No incluido todavía. El envío Telegram puede probarse manualmente con `/api/supervisor/report/send`.
+Descomprimir sobre el repo, correr `npm test`, commit y deploy manual. No requiere variables nuevas respecto de 0.7.1.

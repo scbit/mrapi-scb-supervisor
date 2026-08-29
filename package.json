@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Realtime Supervisor + Telegram + Control UI",
+  "description": "SUPERVISOR SCB V3 - Realtime Supervisor + Telegram + Bandeja operational semantics",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
