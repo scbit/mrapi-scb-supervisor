@@ -1,0 +1,21 @@
+{
+  "name": "mrapi-scb-supervisor",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SUPERVISOR SCB V3 - Roadmap 1 core de supervisión comercial",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "functions-framework --target=helloHttp --port=${PORT:-8080}",
+    "test": "node --test",
+    "check": "node --check src/index.js && node --test"
+  },
+  "engines": {
+    "node": "20.x"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0",
+    "@google-cloud/functions-framework": "^3.4.6",
+    "express": "^4.21.2"
+  }
+}
