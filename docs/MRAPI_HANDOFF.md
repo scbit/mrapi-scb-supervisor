@@ -84,3 +84,10 @@ Important new hardening:
 - Run diagnostics persist saturation warnings and timings.
 - `/api/core/status` exposes checkpoints/latest run only behind Core auth.
 - Roadmap 1 completion is intentionally NOT self-declared; see `docs/ROADMAP1_VALIDATION.md`.
+
+
+## Manual snapshot 0.5.1
+- Added read-only source validation endpoint `/api/core/validate-sources`.
+- Confirmed source database defaults against supplied legacy code: bsscb / bscrmscb / scb-hunter-bd.
+- Validation exposes only database IDs, reachability, collection names, sample existence and sample field keys; no document values.
+- MRAPI must later persist trusted evidence from an authorized validation run before marking Roadmap 1 COMPLETE.

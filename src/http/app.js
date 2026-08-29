@@ -3,6 +3,7 @@ const { publicContractSummary } = require("../contracts/sourceContracts");
 const { localDateParts } = require("../core/time");
 const { version } = require("../../package.json");
 const { requireCoreAuth, authPolicy } = require("./security");
+const { validateSources } = require("../core/sourceValidation");
 
 function createApp({ engine, databases, config }) {
   const app = express();
@@ -35,6 +36,15 @@ function createApp({ engine, databases, config }) {
 
   app.get("/api/core/contracts", coreAuth, (_req, res) => {
     res.json({ ok: true, contracts: publicContractSummary() });
+  });
+
+  app.get("/api/core/validate-sources", coreAuth, async (_req, res) => {
+    try {
+      const validation = await validateSources(databases);
+      res.json({ ok: true, validation });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
   });
 
   app.get("/api/core/identity", coreAuth, (_req, res) => {
