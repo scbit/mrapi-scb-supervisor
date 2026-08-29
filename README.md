@@ -82,7 +82,7 @@ No se accedió a producción ni se hizo deploy durante la creación de este snap
 ## Snapshot 0.2.0
 Adds legacy inspection evidence, executable source contracts, seller identity discovery, stricter CRM recontact evidence, and enriched Hunter activity.
 
-## Snapshot 0.3.0
+## Snapshot 0.4.0
 
 Acelera Roadmap 1 incorporando infraestructura incremental por fuente:
 
@@ -95,3 +95,12 @@ Acelera Roadmap 1 incorporando infraestructura incremental por fuente:
 - resumen de ejecución con cursores y contadores por fuente.
 
 Este snapshot prepara el bloque siguiente (0.4.0), donde se consolidarán métricas integradas y agregación completa por vendedor.
+
+
+## v0.4.0 Core consumption surfaces
+
+- `GET /api/core/sellers?date=YYYY-MM-DD`
+- `GET /api/core/waiting?date=YYYY-MM-DD`
+- `GET /api/core/follow-up-failures`
+
+The daily seller aggregation now rebuilds from persisted current-day derived state so incremental runs do not drop unchanged conversations from daily metrics.

@@ -3,7 +3,7 @@ const { analyzeConversation, messageFingerprint } = require('./conversationMetri
 const { evaluateSevereFollowUp } = require('./followUp');
 const { aggregateSeller } = require('./aggregate');
 const { SellerIdentityResolver } = require('./sellerIdentity');
-const { localDayRange, asDate } = require('./time');
+const { localDayRange, localDateParts, asDate } = require('./time');
 const { cursorWithLookback, advanceCursor, stableFingerprint } = require('./incremental');
 
 class SupervisorEngine {
@@ -94,6 +94,15 @@ class SupervisorEngine {
         if (previousState?.fingerprint === fingerprint) {
           skippedUnchanged += 1;
           if (previousState.metrics) analyzed.push(previousState.metrics);
+          // v0.4 backfill: older derived states did not persist activityDay. Add it without
+          // re-running conversation analysis so the daily aggregate is complete immediately.
+          if (!previousState.activityDay && previousState.metrics) {
+            const activityDay = localDateParts(
+              previousState.metrics.lastMessageAt || conversation.lastMessageAt || now,
+              cfg.timezone
+            ).ymd;
+            await this.store.saveConversationState(conversation.id, { activityDay });
+          }
           continue;
         }
         const seller = await this.resolveConversationSeller(conversation, messages, sellerCache);
@@ -102,9 +111,11 @@ class SupervisorEngine {
           now
         });
         metrics.seller = seller;
+        const activityDay = localDateParts(metrics.lastMessageAt || conversation.lastMessageAt || now, cfg.timezone).ymd;
         await this.store.saveConversationState(conversation.id, {
           fingerprint,
           sourceLastMessageAt: conversation.lastMessageAt,
+          activityDay,
           seller,
           metrics
         });
@@ -144,7 +155,7 @@ class SupervisorEngine {
       const followUps = await this.store.listActiveFollowUpFailures();
 
       // HUNTER: persist new/changed events, then aggregate the derived current-day state.
-      const hunterChanged = await this.hunter.listChangedManagements({
+      const hunterChanged = await this.hunter.listChangedEvents({
         since: hunterSince,
         until: now,
         limit: cfg.incremental.max_hunter_events_per_run
@@ -160,18 +171,27 @@ class SupervisorEngine {
         await this.store.saveHunterEventState(row.id, {
           fingerprint,
           sourceCreatedAt: row.createdAt || null,
+          sourceUpdatedAt: row.updatedAt || row.completedAt || row.createdAt || null,
           day: day.ymd,
           row
         });
       }
-      const nextHunterCursor = advanceCursor(hunterCursor, hunterChanged.map(x => x.createdAt));
+      const nextHunterCursor = advanceCursor(hunterCursor, hunterChanged.map(x => x.updatedAt || x.completedAt || x.createdAt));
       if (nextHunterCursor) await this.store.saveCheckpoint({ cursor: nextHunterCursor, lastRunId: runId }, 'hunter');
       const hunterPersisted = await this.store.listHunterEventsForDay(day.ymd, cfg.incremental.max_hunter_events_per_run * 2);
       const hunterRows = hunterPersisted.map(x => x.row).filter(Boolean);
       const hunterRaw = this.hunter.aggregateBySeller(hunterRows);
 
+      // Daily aggregation must use the complete persisted current-day state, not only the
+      // conversations returned by this incremental window. Otherwise unchanged conversations
+      // would disappear from the daily seller metrics on later runs.
+      const persistedConversationStates = await this.store.listConversationStatesForDay(
+        day.ymd,
+        Math.max(Number(cfg.incremental.max_daily_conversation_states || 5000), conversations.length * 2)
+      );
+      const dailyConversationMetrics = persistedConversationStates.map(x => x.metrics).filter(Boolean);
       const convBySeller = new Map();
-      for (const row of analyzed) {
+      for (const row of dailyConversationMetrics) {
         const seller = row.seller || this.identities.resolve(row.owner || 'unknown');
         if (!convBySeller.has(seller.id)) convBySeller.set(seller.id, { seller, rows: [] });
         convBySeller.get(seller.id).rows.push(row);
@@ -216,6 +236,7 @@ class SupervisorEngine {
         date: day.ymd,
         processedConversations: conversations.length,
         analyzedConversations: analyzed.length,
+        persistedConversationsToday: dailyConversationMetrics.length,
         skippedUnchanged,
         processedDeals: deals.length,
         changedDealEvaluations: changedFollowUps.length,
@@ -226,7 +247,8 @@ class SupervisorEngine {
         sellers: sellers.length,
         clientsWaiting: sellers.reduce((a, s) => a + s.clientsWaiting, 0),
         severeFollowUpFailures: followUps.length,
-        hunterManagements: hunterRows.length,
+        hunterEventsToday: hunterRows.length,
+        hunterManagements: hunterRows.filter(x => x.eventType !== 'task_state').length,
         identityDirectorySize: this.identities.snapshot().length,
         sourceCursors: { inbox: nextInboxCursor, crm: nextCrmCursor, hunter: nextHunterCursor }
       };

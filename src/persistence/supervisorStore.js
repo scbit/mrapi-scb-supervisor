@@ -18,10 +18,7 @@ class SupervisorStore {
   }
 
   async saveCheckpoint(data, id = 'core') {
-    await this.db.collection(this.collections.checkpoints).doc(id).set({
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await this.db.collection(this.collections.checkpoints).doc(id).set({ ...data, updatedAt: new Date().toISOString() }, { merge: true });
   }
 
   async getSourceCheckpoints() {
@@ -36,10 +33,17 @@ class SupervisorStore {
   }
 
   async saveConversationState(id, data) {
-    await this.db.collection(this.collections.conversations).doc(String(id)).set({
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await this.db.collection(this.collections.conversations).doc(String(id)).set({ ...data, updatedAt: new Date().toISOString() }, { merge: true });
+  }
+
+  async listConversationStatesForDay(dateYmd, limit = 5000) {
+    try {
+      const snap = await this.db.collection(this.collections.conversations)
+        .where('activityDay', '==', String(dateYmd)).limit(Math.max(1, Number(limit || 5000))).get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (_) {
+      return [];
+    }
   }
 
   async getDealState(id) {
@@ -48,10 +52,7 @@ class SupervisorStore {
   }
 
   async saveDealState(id, data) {
-    await this.db.collection(this.collections.deals).doc(String(id)).set({
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await this.db.collection(this.collections.deals).doc(String(id)).set({ ...data, updatedAt: new Date().toISOString() }, { merge: true });
   }
 
   async getHunterEventState(id) {
@@ -60,10 +61,7 @@ class SupervisorStore {
   }
 
   async saveHunterEventState(id, data) {
-    await this.db.collection(this.collections.hunterEvents).doc(String(id)).set({
-      ...data,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await this.db.collection(this.collections.hunterEvents).doc(String(id)).set({ ...data, updatedAt: new Date().toISOString() }, { merge: true });
   }
 
   async listHunterEventsForDay(dateYmd, limit = 10000) {
@@ -78,12 +76,7 @@ class SupervisorStore {
     let count = 0;
     for (const row of rows || []) {
       const dealId = String(row.dealId);
-      writer.set(col.doc(dealId), {
-        ...row,
-        active: row.severe === true,
-        runId,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      writer.set(col.doc(dealId), { ...row, active: row.severe === true, runId, updatedAt: new Date().toISOString() }, { merge: true });
       count += row.severe === true ? 1 : 0;
     }
     await writer.close();
@@ -114,20 +107,24 @@ class SupervisorStore {
     await writer.close();
   }
 
+  async listSellerDaily(dateYmd, limit = 500) {
+    const snap = await this.db.collection(this.collections.sellerDaily)
+      .where('date', '==', String(dateYmd)).limit(Math.max(1, Number(limit || 500))).get();
+    return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+  }
+
+  async listWaitingConversations(dateYmd, limit = 500) {
+    const states = await this.listConversationStatesForDay(dateYmd, Math.max(limit * 5, 1000));
+    return states.map(x => x.metrics).filter(x => x?.waitingForHuman)
+      .sort((a, b) => Number(b.waitingMinutes || 0) - Number(a.waitingMinutes || 0)).slice(0, limit);
+  }
+
   async startRun(runId, data) {
-    await this.db.collection(this.collections.runs).doc(runId).set({
-      ...data,
-      status: 'RUNNING',
-      startedAt: new Date().toISOString()
-    });
+    await this.db.collection(this.collections.runs).doc(runId).set({ ...data, status: 'RUNNING', startedAt: new Date().toISOString() });
   }
 
   async finishRun(runId, data) {
-    await this.db.collection(this.collections.runs).doc(runId).set({
-      ...data,
-      status: 'COMPLETE',
-      finishedAt: new Date().toISOString()
-    }, { merge: true });
+    await this.db.collection(this.collections.runs).doc(runId).set({ ...data, status: 'COMPLETE', finishedAt: new Date().toISOString() }, { merge: true });
   }
 
   async failRun(runId, error) {

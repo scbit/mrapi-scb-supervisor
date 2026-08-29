@@ -23,19 +23,17 @@ function analyzeConversation(conversation, messages, options = {}) {
 
   const humanOutbound = events.filter(m => m.actor === "human");
   const inbound = events.filter(m => m.actor === "client" || m.direction === "inbound");
-
   const responseTimes = [];
   const lateResponses = [];
   let waitingSince = null;
   let waitingMessage = null;
-
-  // Treat a burst of inbound customer messages as one wait period. A bot does not
-  // close the wait; only a detected human response does.
   let pendingInbound = null;
+
+  // A burst of customer messages opens one wait period. Only a human reply closes it.
+  // Bot/automation messages intentionally do not count as seller responses.
   for (const event of events) {
     const isInbound = event.actor === "client" || event.direction === "inbound";
     const isHuman = event.actor === "human";
-
     if (isInbound && !pendingInbound) pendingInbound = event;
     if (isHuman && pendingInbound) {
       const mins = minutesBetween(pendingInbound.timestamp, event.timestamp);
@@ -63,9 +61,8 @@ function analyzeConversation(conversation, messages, options = {}) {
   const last = events.at(-1) || null;
   const lastInbound = [...inbound].reverse()[0] || null;
   const lastHuman = [...humanOutbound].reverse()[0] || null;
-  const avgResponseMinutes = responseTimes.length
-    ? Math.round(responseTimes.reduce((sum, n) => sum + n, 0) / responseTimes.length)
-    : null;
+  const responseMinutesTotal = responseTimes.reduce((sum, n) => sum + n, 0);
+  const avgResponseMinutes = responseTimes.length ? Math.round(responseMinutesTotal / responseTimes.length) : null;
   const maxResponseMinutes = responseTimes.length ? Math.max(...responseTimes) : null;
   const waitingMinutes = waitingSince ? Math.max(0, minutesBetween(waitingSince, now)) : null;
 
@@ -89,6 +86,8 @@ function analyzeConversation(conversation, messages, options = {}) {
     outboundCount: events.filter(m => m.direction === "outbound").length,
     botOutboundCount: events.filter(m => m.actor === "bot").length,
     responsesCount: responseTimes.length,
+    responseMinutesTotal,
+    responseMinutes: responseTimes,
     avgResponseMinutes,
     maxResponseMinutes,
     lateCount: lateResponses.length,

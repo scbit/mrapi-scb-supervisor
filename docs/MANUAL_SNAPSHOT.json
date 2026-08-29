@@ -1,34 +1,21 @@
 {
+  "snapshot": "0.4.0",
   "project": "SUPERVISOR SCB V3",
   "roadmap": "ROADMAP 1 — CORE DE SUPERVISIÓN COMERCIAL",
-  "manual_version": "0.3.0",
-  "created_for": "manual acceleration while MRAPI DEV ORCHESTRATOR is being repaired",
-  "runtime": {
-    "project_id": "project_supervisor_scb_59e82cac",
-    "workspace_id": "workspace_scb",
-    "repository_full_name": "scbit/mrapi-scb-supervisor",
-    "repository_path": "C:/Users/Shadow/Documents/GitHub/mrapi-scb-supervisor",
-    "default_branch": "main",
-    "cloud_run_service": "mrapi-scb-supervisor"
-  },
-  "roadmap_provenance": {
-    "roadmap_id": "nFg3JnXtuzgKOn0Fvkz4",
-    "planner_mission_id": "BS6i8W39SqRjo9hQJ6P4",
-    "planner_brain_run_id": "bnxuKcGGwcmTbsrt3rnK"
-  },
-  "manual_coverage": {
-    "m2": "legacy Supervisor + Hunter inspection documented in previous snapshot",
-    "m3": "REUSE/ADAPT/REPLACE matrix documented",
-    "m4": "core source/data contracts present",
-    "m5": "canonical seller identity base present",
-    "m6": "derived persistence and per-source checkpoints implemented",
-    "m7": "incremental reading per source implemented with lookback/fingerprint; requires later production-schema validation",
-    "m8_to_m12": "partially implemented; next snapshot 0.4.0 will harden integrated metrics"
-  },
-  "important": [
-    "MRAPI DEV persisted evidence remains source of truth when orchestration resumes.",
-    "Do not mark milestones COMPLETE solely from this file; inspect repository and run tests.",
-    "No automatic deployment permission is implied by this snapshot.",
-    "Legacy sources remain reference-only and must not become permanent runtime dependencies."
-  ]
+  "roadmap_id": "nFg3JnXtuzgKOn0Fvkz4",
+  "workspace_id": "workspace_scb",
+  "project_id": "project_supervisor_scb_59e82cac",
+  "repository": "scbit/mrapi-scb-supervisor",
+  "branch": "main",
+  "mode": "MANUAL_PRODUCT_DEVELOPMENT_WHILE_ORCHESTRATOR_RECOVERY",
+  "implemented": [
+    "complete current-day seller aggregation from persisted conversation state",
+    "weighted deterministic response metrics",
+    "waiting customer detail ordered by severity",
+    "CRM severe follow-up failures in unified seller output",
+    "Hunter management plus task-state activity integration",
+    "read-only consumption endpoints for sellers, waiting conversations and severe follow-up failures"
+  ],
+  "next": "0.5.0 hardening, integration suite, cost safeguards and Roadmap 1 validation",
+  "orchestrator_reconnect_rule": "Inspect repository and tests first. Reconcile trusted evidence against this snapshot; do not reconstruct passing functionality."
 }

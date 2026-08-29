@@ -58,3 +58,17 @@ Required MRAPI verification on resume:
 3. run the full local test suite;
 4. validate real Firestore field/index compatibility before considering m6/m7 complete;
 5. preserve Roadmap ID and milestone IDs; do not create a replacement Roadmap merely because manual work occurred.
+
+## Manual snapshot 0.4.0
+
+While MRAPI DEV ORCHESTRATOR recovery was in progress, Product Brain advanced Roadmap 1 manually.
+Version 0.4.0 integrates the three operational surfaces into reusable daily seller metrics:
+
+- Bandeja/WhatsApp deterministic response/waiting metrics.
+- CRM severe follow-up failures.
+- Hunter management + task-state activity.
+- Full current-day aggregation from persisted derived state (not only the latest incremental batch).
+- Read-only Core consumption endpoints `/api/core/sellers`, `/api/core/waiting`, `/api/core/follow-up-failures`.
+
+When Orchestrator reconnects, inspect current repository state and execute tests before deciding milestone status.
+Do not rebuild code that trusted evidence proves is already valid.
