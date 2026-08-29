@@ -86,7 +86,12 @@ function normalizeConversation(id, d = {}) {
     lastInboundAt: toIso(d.lastInboundAt),
     lastOutboundAt: toIso(d.lastOutboundAt),
     leadPlatform: text(d, ["leadPlatform"]) || null,
-    sourceChannel: text(d, ["sourceChannel"]) || null,
+    sourceChannel: text(d, ["sourceChannel", "channel", "canal"]) || null,
+    sourceOrigin: text(d, ["sourceOrigin", "origin", "origen"]) || null,
+    adTitle: text(d, ["adTitle", "leadAdTitle", "titleAd", "ad_title"]) || null,
+    adText: text(d, ["adText", "leadAdText", "adBody", "ad_text"]) || null,
+    adId: text(d, ["adId", "ad_id", "metaAdId", "leadAdId"]) || null,
+    adLine: text(d, ["adLine", "line", "lineId", "whatsappLine"]) || null,
     owner: text(d, ["owner", "ownerEmail", "assignedTo", "seller", "vendedor", "responsible"]) || null
   };
 }

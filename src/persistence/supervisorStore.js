@@ -75,6 +75,19 @@ class SupervisorStore {
     }
   }
 
+  async listPendingAssignmentConversationStates(limit = 500) {
+    try {
+      const snap = await this.db.collection(this.collections.conversations)
+        .where('currentWaiting', '==', true)
+        .limit(Math.max(1, Number(limit || 500))).get();
+      return snap.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter(x => x.metrics?.pendingAssignment === true);
+    } catch (_) {
+      return [];
+    }
+  }
+
   async getDealState(id) {
     const doc = await this.db.collection(this.collections.deals).doc(String(id)).get();
     return doc.exists ? doc.data() : null;

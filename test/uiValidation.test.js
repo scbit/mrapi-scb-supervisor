@@ -6,7 +6,7 @@ const pkg = require("../package.json");
 
 test("Core browser UI exposes navigation/action buttons", () => {
   const html = fs.readFileSync(path.join(__dirname, "../public/validate.html"), "utf8");
-  assert.equal(pkg.version, "0.5.7");
+  assert.equal(pkg.version, "0.5.8");
   for (const text of [
     "Validar fuentes",
     "Estado Core",

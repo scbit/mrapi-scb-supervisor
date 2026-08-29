@@ -31,6 +31,27 @@ function sanitizeWaitingMetric(metrics, phrases = []) {
   };
 }
 
+
+function assignmentState(conversation = {}, options = {}) {
+  const pendingStages = new Set(
+    (options.pendingAssignmentStages || [])
+      .map(v => String(v || "").trim().toUpperCase())
+      .filter(Boolean)
+  );
+  const stage = String(conversation.stage || "").trim().toUpperCase();
+  const hasOwner = !!String(conversation.owner || "").trim();
+  const hasDeal = !!String(conversation.dealId || "").trim();
+  const pendingByStage = pendingStages.has(stage);
+  const pendingByNoOwner = options.pendingAssignmentIfNoOwner !== false && !hasOwner && !hasDeal;
+  const pending = pendingByStage || pendingByNoOwner;
+  return {
+    pendingAssignment: pending,
+    assignmentState: pending ? "pending_assignment" : "assigned",
+    assignmentReason: pendingByStage ? "pending_stage" : (pendingByNoOwner ? "no_owner_no_deal" : "assigned")
+  };
+}
+
+
 function messageFingerprint(conversation, messages) {
   const payload = {
     conversationId: conversation.id,
@@ -95,6 +116,8 @@ function analyzeConversation(conversation, messages, options = {}) {
   }
 
   const last = events.at(-1) || null;
+  const firstInbound = events.find(e => e.actor === "client") || null;
+  const assignment = assignmentState(conversation, options);
   const lastInbound = [...inbound].reverse()[0] || null;
   const lastHuman = [...humanOutbound].reverse()[0] || null;
   const responseMinutesTotal = responseTimes.reduce((sum, n) => sum + n, 0);
@@ -111,6 +134,21 @@ function analyzeConversation(conversation, messages, options = {}) {
     conversationId: conversation.id,
     contactId: conversation.contactId || null,
     dealId: conversation.dealId || null,
+    firstInboundText: firstInbound?.text || null,
+    firstInboundAt: firstInbound?.timestamp || null,
+    sourceChannel: conversation.sourceChannel || conversation.leadPlatform || null,
+    sourceOrigin: conversation.sourceOrigin || null,
+    adTitle: conversation.adTitle || null,
+    adText: conversation.adText || null,
+    adId: conversation.adId || null,
+    adLine: conversation.adLine || conversation.lineId || null,
+    pendingAssignment: assignment.pendingAssignment,
+    assignmentState: assignment.assignmentState,
+    assignmentReason: assignment.assignmentReason,
+    pendingAssignmentSince: assignment.pendingAssignment ? (firstInbound?.timestamp || conversation.lastMessageAt || null) : null,
+    pendingAssignmentMinutes: assignment.pendingAssignment && (firstInbound?.timestamp || conversation.lastMessageAt)
+      ? Math.max(0, Math.floor(minutesBetween(firstInbound?.timestamp || conversation.lastMessageAt, options.now || new Date())))
+      : null,
     contactName: conversation.contactName || conversation.phone || "sin dato",
     phone: conversation.phone || null,
     owner: conversation.owner || null,
@@ -142,4 +180,4 @@ function analyzeConversation(conversation, messages, options = {}) {
   };
 }
 
-module.exports = { analyzeConversation, messageFingerprint, isTerminalCourtesy, sanitizeWaitingMetric };
+module.exports = { analyzeConversation, messageFingerprint, isTerminalCourtesy, sanitizeWaitingMetric, assignmentState };

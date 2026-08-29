@@ -152,6 +152,8 @@ class SupervisorEngine {
         const metrics = analyzeConversation(conversation, messages, {
           lateAfterMinutes: cfg.response.late_after_minutes,
           terminalCourtesyPhrases: cfg.response.terminal_courtesy_phrases || [],
+          pendingAssignmentStages: cfg.assignment?.pending_stages || [],
+          pendingAssignmentIfNoOwner: cfg.assignment?.pending_if_no_owner !== false,
           now
         });
         metrics.seller = seller;
@@ -317,23 +319,9 @@ class SupervisorEngine {
         .filter(Boolean)
         .map(x => sanitizeWaitingMetric(x, cfg.response.terminal_courtesy_phrases || []));
 
-      const unresolvedStates = await this.store.listUnassignedWaitingConversationStates(
-        Number(cfg.incremental.max_unassigned_resolution_per_run || 25)
-      );
-      const unresolvedCache = new Map();
-      let remappedUnassigned = 0;
-      for (const state of unresolvedStates) {
-        const seller = await this.resolveDerivedStateSeller(state, unresolvedCache);
-        if (seller?.id && seller.id !== 'unknown') {
-          const updatedMetrics = { ...(state.metrics || {}), seller };
-          await this.store.saveConversationState(state.id, {
-            seller,
-            sellerId: seller.id,
-            metrics: updatedMetrics
-          });
-          remappedUnassigned += 1;
-        }
-      }
+      // Pending assignment is a valid operational queue, not an identity error.
+      // Supervisor never auto-assigns these chats.
+      const remappedUnassigned = 0;
 
       const currentWaitingStates = await this.store.listCurrentWaitingConversationStates(
         Number(cfg.incremental.max_current_conversation_states || 5000)
@@ -364,8 +352,9 @@ class SupervisorEngine {
 
       const convBySeller = new Map();
       for (const row of [...dailyConversationMetrics, ...carriedWaits]) {
+        if (row.pendingAssignment === true) continue;
         const seller = row.seller || this.identities.resolve(row.owner || 'unknown');
-        if (seller.id === 'unknown') continue; // keep unassigned work out of seller rankings
+        if (seller.id === 'unknown') continue;
         if (!convBySeller.has(seller.id)) convBySeller.set(seller.id, { seller, rows: [] });
         convBySeller.get(seller.id).rows.push(row);
       }
@@ -450,7 +439,8 @@ class SupervisorEngine {
         analyzedConversations: analyzed.length,
         persistedConversationsToday: dailyConversationMetrics.length,
         currentWaitingConversations: currentWaitingMetrics.length,
-        unassignedWaitingConversations: currentWaitingMetrics.filter(x => (x.seller?.id || 'unknown') === 'unknown').length,
+        pendingAssignmentConversations: currentWaitingMetrics.filter(x => x.pendingAssignment === true).length,
+        unassignedWaitingConversations: currentWaitingMetrics.filter(x => (x.seller?.id || 'unknown') === 'unknown' && x.pendingAssignment !== true).length,
         remappedUnassigned,
         crmMode,
         crmBootstrapRemaining,

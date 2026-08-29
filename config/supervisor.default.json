@@ -73,5 +73,14 @@
       "basura@sentirecustomsbroker.com",
       "recupero@sentirecustomsbroker.com"
     ]
+  },
+  "assignment": {
+    "pending_stages": [
+      "NUEVO",
+      "SIN ASIGNAR",
+      "NUEVO / SIN ASIGNAR"
+    ],
+    "pending_if_no_owner": true,
+    "alert_after_minutes": 15
   }
 }

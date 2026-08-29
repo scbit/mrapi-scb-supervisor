@@ -176,3 +176,13 @@ La raíz `/` ahora muestra un index simple con botón directo a `/validate` y ac
 - Fixes Cloud Run startup failure introduced in 0.5.6.
 - `FieldPath` is now imported from `@google-cloud/firestore`, which is the Firestore package actually declared by this service.
 - No business-rule or read-budget changes from 0.5.6.
+
+## 0.5.8 — Pending assignment + ad origin
+
+- `Nuevo / Sin asignar` is a valid operational queue, not an identity error.
+- Supervisor never auto-assigns those chats.
+- Derived state preserves first inbound customer message/time.
+- Derived state preserves ad/source metadata when available: channel, origin, ad title, ad text, ad id, line.
+- Added protected endpoint `/api/core/pending-assignment`.
+- Pending-assignment chats stay outside seller rankings until a real owner/deal exists.
+- Read budgets from 0.5.7 are unchanged.

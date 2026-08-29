@@ -93,6 +93,19 @@ function createApp({ engine, databases, config }) {
     }
   });
 
+  app.get("/api/core/pending-assignment", coreAuth, async (req, res) => {
+    try {
+      const rows = await engine.store.listPendingAssignmentConversationStates(Number(req.query.limit || 500));
+      res.json({
+        ok: true,
+        count: rows.length,
+        conversations: rows.map(x => x.metrics).filter(Boolean)
+      });
+    } catch (error) {
+      res.status(500).json({ ok: false, error: error.message });
+    }
+  });
+
   app.get("/api/core/waiting", coreAuth, async (req, res) => {
     try {
       const date = String(req.query.date || localDateParts(new Date(), config.timezone).ymd);
