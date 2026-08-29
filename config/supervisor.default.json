@@ -29,7 +29,11 @@
       "listo gracias",
       "listo, gracias",
       "genial gracias",
-      "genial, gracias"
+      "genial, gracias",
+      "okey gracias",
+      "okey, gracias",
+      "bueno",
+      "si si"
     ]
   },
   "follow_up": {
@@ -52,11 +56,22 @@
     "lookback_minutes": 120,
     "max_conversations_per_run": 250,
     "max_messages_per_conversation": 500,
-    "max_deals_per_run": 1500,
+    "max_deals_per_run": 250,
     "bootstrap_hours": 24,
     "max_hunter_events_per_run": 5000,
     "checkpoint_schema_version": 1,
     "max_daily_conversation_states": 5000,
-    "max_current_conversation_states": 5000
+    "max_current_conversation_states": 5000,
+    "max_unassigned_resolution_per_run": 25
+  },
+  "seller_roster": {
+    "exclude_emails": [
+      "admin@scb.com",
+      "mrapi@mrapi.us",
+      "marketing@sentirecustomsbroker.com",
+      "hunter@sentirecustomsbroker.com",
+      "basura@sentirecustomsbroker.com",
+      "recupero@sentirecustomsbroker.com"
+    ]
   }
 }

@@ -1,4 +1,5 @@
 const { normalizeDeal, normalizeContact } = require('../core/normalizers');
+const { FieldPath } = require('firebase-admin/firestore');
 const { toIso, asDate } = require('../core/time');
 
 class CrmAdapter {
@@ -50,6 +51,18 @@ class CrmAdapter {
     } catch (_) {
       return [];
     }
+  }
+
+  async listBootstrapDeals({ afterId = null, limit = null } = {}) {
+    const max = Math.max(1, Number(limit || this.config.incremental.max_deals_per_run || 250));
+    let query = this.db.collection('deals').orderBy(FieldPath.documentId(), 'asc');
+    if (afterId) query = query.startAfter(String(afterId));
+    const snap = await query.limit(max).get();
+    return {
+      deals: snap.docs.map(doc => normalizeDeal(doc.id, doc.data())),
+      lastDocId: snap.empty ? afterId : snap.docs[snap.docs.length - 1].id,
+      pageFull: snap.size >= max
+    };
   }
 
   async findContactByPhone(phone) {

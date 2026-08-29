@@ -25,26 +25,27 @@ class SellerIdentityResolver {
     }
   }
 
-  register(canonicalId, candidates = [], source = "discovered") {
+  register(canonicalId, candidates = [], source = "discovered", label = null) {
     const id = String(canonicalId || "").trim() || slug(candidates.find(Boolean));
     const clean = [id, ...candidates].flat().filter(Boolean).map(v => String(v).trim()).filter(Boolean);
     if (!clean.length) return null;
     for (const value of clean) this.aliases.set(canonicalToken(value), id);
-    const previous = this.directory.get(id) || { id, aliases: [], sources: [] };
+    const previous = this.directory.get(id) || { id, aliases: [], sources: [], label: null };
     previous.aliases = Array.from(new Set([...previous.aliases, ...clean]));
     previous.sources = Array.from(new Set([...previous.sources, source]));
+    if (label && !previous.label) previous.label = String(label).trim();
     this.directory.set(id, previous);
     return previous;
   }
 
   registerCrmUser(user = {}) {
     const canonical = user.email || user.id || user.name;
-    return this.register(canonical, [user.id, user.name, user.email], "crm_user");
+    return this.register(canonical, [user.id, user.name, user.email], "crm_user", user.name || user.email || user.id);
   }
 
   registerHunterUser(user = {}) {
     const canonical = user.email || user.id || user.name;
-    return this.register(canonical, [user.id, user.name, user.email], "hunter_user");
+    return this.register(canonical, [user.id, user.name, user.email], "hunter_user", user.name || user.email || user.id);
   }
 
   resolve(...candidates) {
@@ -53,7 +54,7 @@ class SellerIdentityResolver {
       const key = canonicalToken(candidate);
       if (this.aliases.has(key)) {
         const id = this.aliases.get(key);
-        return { id, label: this.directory.get(id)?.aliases?.[0] || candidate, source: "mapped", raw: candidate };
+        return { id, label: this.directory.get(id)?.label || this.directory.get(id)?.aliases?.[0] || candidate, source: "mapped", raw: candidate };
       }
     }
     const preferred = clean.find(x => x.includes("@")) || clean[0] || "unknown";

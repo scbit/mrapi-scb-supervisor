@@ -159,3 +159,14 @@ La raíz `/` ahora muestra un index simple con botón directo a `/validate` y ac
 - One-time migration indexes existing SUPERVISOR derived conversation states (not source history).
 - Exact/short courtesy closings such as `Gracias` stop generating a waiting-client alert.
 - Unassigned conversations are kept out of seller rankings and counted separately in run summary.
+
+## 0.5.6 — bounded reads + CRM continuation
+
+- Inbox remains incremental; historical 20k conversations are never full-scanned by this patch.
+- CRM bootstrap is capped at 250 deal documents per run and continues from a persisted document-id checkpoint.
+- CRM contact/notes enrichment happens only for severe follow-up candidates, reducing extra reads.
+- Normal CRM incremental mode starts only after the bootstrap is complete.
+- Unassigned current waits are remapped from derived state with a cap of 25 per run.
+- Known technical/non-sales CRM accounts are excluded by exact configured email.
+- Seller labels prefer the CRM user's name.
+- Exact short courtesy endings include `Okey gracias`, `Bueno` and `Si si`.

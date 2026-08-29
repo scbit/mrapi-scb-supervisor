@@ -63,6 +63,18 @@ class SupervisorStore {
     }
   }
 
+  async listUnassignedWaitingConversationStates(limit = 25) {
+    try {
+      const snap = await this.db.collection(this.collections.conversations)
+        .where('currentWaiting', '==', true)
+        .where('sellerId', '==', 'unknown')
+        .limit(Math.max(1, Number(limit || 25))).get();
+      return snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    } catch (_) {
+      return [];
+    }
+  }
+
   async getDealState(id) {
     const doc = await this.db.collection(this.collections.deals).doc(String(id)).get();
     return doc.exists ? doc.data() : null;

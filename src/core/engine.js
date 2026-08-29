@@ -46,6 +46,35 @@ class SupervisorEngine {
     return this.identities.resolve('unknown');
   }
 
+  async resolveDerivedStateSeller(state, cache = new Map()) {
+    const metrics = state?.metrics || {};
+    const current = metrics.seller || state?.seller || null;
+    if (current?.id && current.id !== 'unknown') return current;
+
+    if (metrics.dealId) {
+      const key = `deal:${metrics.dealId}`;
+      if (!cache.has(key)) cache.set(key, await this.crm.getDeal(metrics.dealId));
+      const deal = cache.get(key);
+      if (deal?.owner) return this.identities.resolve(deal.owner);
+    }
+
+    if (metrics.contactId) {
+      const key = `contact:${metrics.contactId}`;
+      if (!cache.has(key)) cache.set(key, await this.crm.getContact(metrics.contactId));
+      const contact = cache.get(key);
+      if (contact?.owner) return this.identities.resolve(contact.owner);
+    }
+
+    if (metrics.phone) {
+      const key = `phone:${metrics.phone}`;
+      if (!cache.has(key)) cache.set(key, await this.crm.findContactByPhone(metrics.phone));
+      const contact = cache.get(key);
+      if (contact?.owner) return this.identities.resolve(contact.owner);
+    }
+
+    return this.identities.resolve('unknown');
+  }
+
   async run({ now = new Date(), forceSince = null } = {}) {
     const runId = crypto.randomUUID();
     const runStartedMs = Date.now();
@@ -80,6 +109,13 @@ class SupervisorEngine {
       ]);
       for (const user of crmUsers) this.identities.registerCrmUser(user);
       for (const user of hunterUsers) this.identities.registerHunterUser(user);
+      const rosterExclude = new Set(
+        (cfg.seller_roster?.exclude_emails || []).map(x => String(x || '').trim().toLowerCase()).filter(Boolean)
+      );
+      const crmSellerUsers = crmUsers.filter(user => {
+        const email = String(user.email || '').trim().toLowerCase();
+        return !email || !rosterExclude.has(email);
+      });
 
       // INBOX: changed conversations + fingerprint deduplication.
       const inboxStartedMs = Date.now();
@@ -135,14 +171,42 @@ class SupervisorEngine {
       if (nextInboxCursor) await this.store.saveCheckpoint({ cursor: nextInboxCursor, lastRunId: runId }, 'inbox');
       const inboxDurationMs = Date.now() - inboxStartedMs;
 
-      // CRM: only deals changed within the source window when the schema supports it.
+      // CRM: bounded bootstrap pages are persisted by document id.
+      // No repeated 1,500-deal bootstrap and no source-chat full scan.
       const crmStartedMs = Date.now();
-      const deals = await this.crm.listChangedDeals({ since: crmCursor ? crmSince : null, limit: cfg.incremental.max_deals_per_run });
+      const crmBootstrapId = 'crm_bootstrap_v2';
+      const crmBootstrap = await this.store.getCheckpoint(crmBootstrapId);
+      const crmBootstrapComplete = crmBootstrap?.complete === true;
+      let crmBootstrapPage = null;
+      let deals = [];
+      let crmMode = 'incremental';
+
+      if (!crmBootstrapComplete) {
+        crmMode = 'bootstrap';
+        crmBootstrapPage = await this.crm.listBootstrapDeals({
+          afterId: crmBootstrap?.afterId || null,
+          limit: cfg.incremental.max_deals_per_run
+        });
+        deals = crmBootstrapPage.deals;
+      } else {
+        deals = await this.crm.listChangedDeals({
+          since: crmSince,
+          limit: cfg.incremental.max_deals_per_run
+        });
+      }
+
       const changedFollowUps = [];
       let skippedDeals = 0;
+      let crmEnrichedDeals = 0;
       for (const dealRaw of deals) {
-        const deal = await this.crm.enrichDealContact(dealRaw);
-        const evaluation = evaluateSevereFollowUp(deal, cfg, now);
+        const preliminary = evaluateSevereFollowUp(dealRaw, cfg, now);
+        let deal = dealRaw;
+        let evaluation = preliminary;
+        if (preliminary.severe) {
+          deal = await this.crm.enrichDealContact(dealRaw);
+          evaluation = evaluateSevereFollowUp(deal, cfg, now);
+          crmEnrichedDeals += 1;
+        }
         const fingerprint = stableFingerprint({
           stage: deal.stageNorm,
           dueDate: deal.dueDate,
@@ -162,11 +226,30 @@ class SupervisorEngine {
         changedFollowUps.push(evaluation);
       }
       if (changedFollowUps.length) await this.store.replaceFollowUpFailures(changedFollowUps, runId);
-      let nextCrmCursor = advanceCursor(crmCursor, deals.map(x => x.updatedAt));
-      if (!crmCursor && deals.length < Number(cfg.incremental.max_deals_per_run)) {
-        nextCrmCursor = nextCrmCursor || now.toISOString();
+
+      let nextCrmCursor = crmCursor;
+      let crmBootstrapRemaining = false;
+      if (crmMode === 'bootstrap') {
+        const firstStartedAt = crmBootstrap?.startedAt || now.toISOString();
+        const complete = deals.length < Number(cfg.incremental.max_deals_per_run);
+        crmBootstrapRemaining = !complete;
+        await this.store.saveCheckpoint({
+          startedAt: firstStartedAt,
+          afterId: crmBootstrapPage?.lastDocId || crmBootstrap?.afterId || null,
+          complete,
+          lastRunId: runId,
+          pageSize: deals.length
+        }, crmBootstrapId);
+
+        if (complete) {
+          nextCrmCursor = firstStartedAt;
+          await this.store.saveCheckpoint({ cursor: nextCrmCursor, lastRunId: runId }, 'crm');
+        }
+      } else {
+        nextCrmCursor = advanceCursor(crmCursor, deals.map(x => x.updatedAt));
+        if (nextCrmCursor) await this.store.saveCheckpoint({ cursor: nextCrmCursor, lastRunId: runId }, 'crm');
       }
-      if (nextCrmCursor) await this.store.saveCheckpoint({ cursor: nextCrmCursor, lastRunId: runId }, 'crm');
+
       const followUps = await this.store.listActiveFollowUpFailures();
       const crmDurationMs = Date.now() - crmStartedMs;
 
@@ -234,6 +317,24 @@ class SupervisorEngine {
         .filter(Boolean)
         .map(x => sanitizeWaitingMetric(x, cfg.response.terminal_courtesy_phrases || []));
 
+      const unresolvedStates = await this.store.listUnassignedWaitingConversationStates(
+        Number(cfg.incremental.max_unassigned_resolution_per_run || 25)
+      );
+      const unresolvedCache = new Map();
+      let remappedUnassigned = 0;
+      for (const state of unresolvedStates) {
+        const seller = await this.resolveDerivedStateSeller(state, unresolvedCache);
+        if (seller?.id && seller.id !== 'unknown') {
+          const updatedMetrics = { ...(state.metrics || {}), seller };
+          await this.store.saveConversationState(state.id, {
+            seller,
+            sellerId: seller.id,
+            metrics: updatedMetrics
+          });
+          remappedUnassigned += 1;
+        }
+      }
+
       const currentWaitingStates = await this.store.listCurrentWaitingConversationStates(
         Number(cfg.incremental.max_current_conversation_states || 5000)
       );
@@ -282,7 +383,7 @@ class SupervisorEngine {
         followBySeller.get(seller.id).rows.push(f);
       }
 
-      const crmSellerDirectory = crmUsers.map(user => this.identities.resolve(user.email, user.id, user.name));
+      const crmSellerDirectory = crmSellerUsers.map(user => this.identities.resolve(user.email, user.id, user.name));
       const sellerIds = new Set([
         ...crmSellerDirectory.map(x => x.id),
         ...convBySeller.keys(),
@@ -316,7 +417,7 @@ class SupervisorEngine {
       const diagnostics = buildRunDiagnostics({
         counts: {
           inbox: conversations.length,
-          crm: deals.length,
+          crm: crmMode === 'bootstrap' ? 0 : deals.length,
           hunter: hunterChanged.length,
           dailyState: persistedConversationStates.length
         },
@@ -338,6 +439,9 @@ class SupervisorEngine {
           total: Date.now() - runStartedMs
         }
       });
+      if (crmMode === 'bootstrap' && crmBootstrapRemaining) {
+        diagnostics.warnings.push('CRM_BOOTSTRAP_IN_PROGRESS');
+      }
 
       const summary = {
         runId,
@@ -347,6 +451,11 @@ class SupervisorEngine {
         persistedConversationsToday: dailyConversationMetrics.length,
         currentWaitingConversations: currentWaitingMetrics.length,
         unassignedWaitingConversations: currentWaitingMetrics.filter(x => (x.seller?.id || 'unknown') === 'unknown').length,
+        remappedUnassigned,
+        crmMode,
+        crmBootstrapRemaining,
+        crmBootstrapAfterId: crmBootstrapPage?.lastDocId || crmBootstrap?.afterId || null,
+        crmEnrichedDeals,
         skippedUnchanged,
         processedDeals: deals.length,
         changedDealEvaluations: changedFollowUps.length,

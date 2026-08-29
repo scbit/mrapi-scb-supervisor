@@ -18,9 +18,9 @@
   ],
   "next": "0.5.0 hardening, integration suite, cost safeguards and Roadmap 1 validation",
   "orchestrator_reconnect_rule": "Inspect repository and tests first. Reconcile trusted evidence against this snapshot; do not reconstruct passing functionality.",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "status": "ROADMAP_1_RELEASE_CANDIDATE_MANUAL",
   "manual_progress_note": "Hardening, diagnostics, core API auth, timezone fixes, validation suite. Requires MRAPI trusted-evidence verification before Roadmap COMPLETE.",
   "roadmap1_validation_doc": "docs/ROADMAP1_VALIDATION.md",
-  "manual_addition": "Functional validation fixes: CRM bootstrap, CRM-user seller roster, cross-day current waiting state, courtesy closing filter and unassigned separation."
+  "manual_addition": "Bounded read budget: Inbox incremental, CRM bootstrap 250/page, severe-only enrichment, unassigned repair max 25/run."
 }
