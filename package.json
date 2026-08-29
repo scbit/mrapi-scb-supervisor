@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Realtime Supervisor + Telegram",
+  "description": "SUPERVISOR SCB V3 - Realtime Supervisor + Telegram + Control UI",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
@@ -10,7 +10,9 @@
     "test": "node --test",
     "check": "node --check src/index.js && node --test"
   },
-  "engines": {"node":"20.x"},
+  "engines": {
+    "node": "20.x"
+  },
   "dependencies": {
     "@google-cloud/firestore": "^7.11.0",
     "@google-cloud/functions-framework": "^3.4.6",
