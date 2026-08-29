@@ -14,6 +14,12 @@ class InboxAdapter {
     return snap.docs.map(doc => normalizeConversation(doc.id, doc.data()));
   }
 
+  async getConversation(conversationId) {
+    const doc = await this.db.collection("conversations").doc(String(conversationId)).get();
+    if (!doc.exists) return null;
+    return normalizeConversation(doc.id, doc.data());
+  }
+
   async getMessages(conversationId, limit) {
     const max = Math.max(1, Number(limit || this.config.incremental.max_messages_per_conversation || 500));
     let snap;

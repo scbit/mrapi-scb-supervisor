@@ -198,3 +198,12 @@ Mapped the actual Inbox conversation fields:
 - referralCtwaClid -> referralCtwaClid
 
 No additional source scans were introduced. Existing read budgets remain unchanged.
+
+## 0.5.11 — Bounded legacy pending-assignment backfill
+
+- One-time checkpoint: `pending_assignment_backfill_v1`.
+- Reads only current waiting states with sellerId `unknown`, maximum 100.
+- For each exact conversation ID, performs one direct Inbox conversation-document read.
+- No Inbox collection scan and no historical message scan.
+- Reclassifies legacy states as pending-assignment/assigned using current source stage/owner/deal.
+- Backfills real Meta Ad referral fields from the source conversation document.

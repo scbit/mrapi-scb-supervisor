@@ -323,6 +323,60 @@ class SupervisorEngine {
       // Supervisor never auto-assigns these chats.
       const remappedUnassigned = 0;
 
+      // One-time bounded migration for legacy "unknown" waiting states created before
+      // pending-assignment/ad-referral fields existed. This does NOT scan Inbox.
+      // It reads only the exact source conversation documents referenced by current unknown waits.
+      let pendingAssignmentBackfilled = 0;
+      const pendingBackfillCheckpoint = await this.store.getCheckpoint('pending_assignment_backfill_v1');
+      if (!pendingBackfillCheckpoint?.complete) {
+        const legacyUnknownWaits = await this.store.listUnassignedWaitingConversationStates(
+          Math.min(100, Number(cfg.incremental.max_current_conversation_states || 5000))
+        );
+        for (const state of legacyUnknownWaits) {
+          const sourceConversation = await this.inbox.getConversation(state.id);
+          if (!sourceConversation || !state.metrics) continue;
+
+          const assignment = assignmentState(sourceConversation, {
+            pendingAssignmentStages: cfg.assignment?.pending_stages || [],
+            pendingAssignmentIfNoOwner: cfg.assignment?.pending_if_no_owner !== false
+          });
+
+          const metrics = {
+            ...state.metrics,
+            contactId: sourceConversation.contactId || state.metrics.contactId || null,
+            dealId: sourceConversation.dealId || state.metrics.dealId || null,
+            phone: sourceConversation.phone || state.metrics.phone || null,
+            owner: sourceConversation.owner || state.metrics.owner || null,
+            stage: sourceConversation.stage || state.metrics.stage || null,
+            sourceChannel: sourceConversation.sourceChannel || sourceConversation.leadPlatform || state.metrics.sourceChannel || null,
+            sourceOrigin: sourceConversation.sourceOrigin || state.metrics.sourceOrigin || null,
+            adTitle: sourceConversation.adTitle || state.metrics.adTitle || null,
+            adText: sourceConversation.adText || state.metrics.adText || null,
+            adId: sourceConversation.adId || state.metrics.adId || null,
+            adLine: sourceConversation.adLine || sourceConversation.lineId || state.metrics.adLine || null,
+            referralCtwaClid: sourceConversation.referralCtwaClid || state.metrics.referralCtwaClid || null,
+            pendingAssignment: assignment.pendingAssignment,
+            assignmentState: assignment.assignmentState,
+            assignmentReason: assignment.assignmentReason
+          };
+
+          await this.store.saveConversationState(state.id, {
+            sellerId: sourceConversation.owner
+              ? this.identities.resolve(sourceConversation.owner).id
+              : (assignment.pendingAssignment ? 'unknown' : state.sellerId || 'unknown'),
+            currentWaiting: metrics.waitingForHuman === true,
+            metrics
+          });
+          pendingAssignmentBackfilled += 1;
+        }
+
+        await this.store.saveCheckpoint({
+          complete: true,
+          processed: pendingAssignmentBackfilled,
+          lastRunId: runId
+        }, 'pending_assignment_backfill_v1');
+      }
+
       const currentWaitingStates = await this.store.listCurrentWaitingConversationStates(
         Number(cfg.incremental.max_current_conversation_states || 5000)
       );
@@ -442,6 +496,7 @@ class SupervisorEngine {
         pendingAssignmentConversations: currentWaitingMetrics.filter(x => x.pendingAssignment === true).length,
         unassignedWaitingConversations: currentWaitingMetrics.filter(x => (x.seller?.id || 'unknown') === 'unknown' && x.pendingAssignment !== true).length,
         remappedUnassigned,
+        pendingAssignmentBackfilled,
         crmMode,
         crmBootstrapRemaining,
         crmBootstrapAfterId: crmBootstrapPage?.lastDocId || crmBootstrap?.afterId || null,
