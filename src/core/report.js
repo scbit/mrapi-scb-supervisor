@@ -119,7 +119,10 @@ function formatReport(r){
 
   pushRanking(L,'🏅 TOP CARTERA',topBy(r.sellers,'activeDeals'),'activeDeals');
   pushRanking(L,'🔴 MAYOR CARTERA VENCIDA',topBy(r.sellers,'overdueDeals'),'overdueDeals');
-  pushRanking(L,'🟢 MAYOR CARTERA AL DÍA',topBy(r.sellers,'upToDateDeals'),'upToDateDeals');
+  L.push('','🟢 CARTERA AL DÍA','');
+  const allUpToDate=r.sellers.slice().sort((a,b)=>(b.upToDateDeals||0)-(a.upToDateDeals||0)||String(a.label).localeCompare(String(b.label)));
+  if(!allUpToDate.length)L.push('Sin datos');
+  else allUpToDate.forEach(s=>L.push(`${cleanSellerLabel(s.label)} — ${s.upToDateDeals||0} al día / ${s.activeDeals||0} vigentes`));
 
   L.push('','👥 REQUIEREN ATENCIÓN','');
   const attention=attentionSellers(r.sellers);

@@ -30,7 +30,10 @@ test('general report uses compact rankings and does not dump full seller list tw
   assert.match(text,/📊 CARTERA VIGENTE\n\nTotal: 3842/);
   assert.match(text,/🏅 TOP CARTERA/);
   assert.match(text,/🔴 MAYOR CARTERA VENCIDA/);
-  assert.match(text,/🟢 MAYOR CARTERA AL DÍA/);
+  assert.match(text,/🟢 CARTERA AL DÍA/);
+  assert.match(text,/Augusto Vera — 46 al día \/ 825 vigentes/);
+  assert.match(text,/Oficina CABA — 49 al día \/ 732 vigentes/);
+  assert.match(text,/Florencia Zanin — 118 al día \/ 210 vigentes/);
   assert.match(text,/👥 REQUIEREN ATENCIÓN/);
   assert.match(text,/Augusto Vera/);
   assert.doesNotMatch(text,/Agente AMBA Augusto Vera/);
