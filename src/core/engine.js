@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { analyzeConversation, messageFingerprint, sanitizeWaitingMetric } = require('./conversationMetrics');
+const { analyzeConversation, messageFingerprint, sanitizeWaitingMetric, assignmentState } = require('./conversationMetrics');
 const { evaluateSevereFollowUp } = require('./followUp');
 const { aggregateSeller } = require('./aggregate');
 const { SellerIdentityResolver } = require('./sellerIdentity');

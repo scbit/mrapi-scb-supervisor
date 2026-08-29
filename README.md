@@ -215,3 +215,10 @@ with-plus / without-plus variants (e.g. `549...__549...` and `+549...__+549...`)
 A fresh checkpoint `pending_assignment_backfill_v2` forces one bounded retry even if v1
 completed without matching documents. The run summary reports `pendingAssignmentBackfillNotFound`.
 No collection scan or historical message scan is added.
+
+## 0.5.13 — assignmentState runtime hotfix
+
+Fixes the Core runtime error `assignmentState is not defined` introduced by the
+bounded pending-assignment backfill. `assignmentState` is now explicitly imported
+from `conversationMetrics`. No business logic, read limits, checkpoints, or source
+queries were changed.
