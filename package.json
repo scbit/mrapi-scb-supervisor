@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.7.4",
+  "version": "0.7.5",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Active portfolio split into up-to-date, overdue, and no due date per seller",
+  "description": "SUPERVISOR SCB V3 - Compact general supervisor report UX for Telegram",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

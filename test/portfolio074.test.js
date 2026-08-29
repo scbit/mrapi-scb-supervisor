@@ -45,5 +45,5 @@ test('report exposes Al día per seller',()=>{
   ],waitingRows:[],conversationRows:[],events:[],sellerLabels:new Map(),sellerRoster:[{id:'seller',label:'Seller',email:'seller@x.com',raw:'seller@x.com'}]});
   assert.equal(r.portfolio.total,2);assert.equal(r.portfolio.upToDate,1);assert.equal(r.portfolio.overdue,1);
   assert.equal(r.sellers[0].upToDateDeals,1);assert.equal(r.sellers[0].overdueDeals,1);
-  assert.match(r.text,/Al día: 1/);assert.match(r.text,/Seller: 2 vigentes \| 1 al día \| 1 vencidos/);
+  assert.match(r.text,/Al día: 1/);assert.match(r.text,/Seller — 2/);
 });
