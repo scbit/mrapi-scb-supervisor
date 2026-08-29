@@ -1,0 +1,5 @@
+const {normalizeStage}=require('./normalizers');
+const WON=new Set(['GANADO','GANADO COURIER','GANADO MARITIMO','GANADO MARÍTIMO']);
+function isWon(s){const x=normalizeStage(s);return WON.has(x)||x.startsWith('GANADO ')}
+function transitionEvents(previous,current,{bootstrap=false,conversationState=null,occurredAt=new Date().toISOString()}={}){if(bootstrap||!previous)return[];const prev=normalizeStage(previous.stageNorm||previous.stage);const cur=normalizeStage(current.stageNorm||current.stage);const base={dealId:current.id,contactId:current.contactId||null,conversationId:current.conversationId||null,seller:current.owner||null,previousStage:prev,currentStage:cur,occurredAt};const out=[];if(prev!=='HORNO'&&cur==='HORNO')out.push({type:'HORNO',...base});if(!isWon(prev)&&isWon(cur)){out.push({type:'GANADO',...base});const ad=conversationState?.metrics||conversationState||null;if(ad?.adId)out.push({type:'GANADO_FROM_AD',...base,adId:ad.adId,adTitle:ad.adTitle||null,adLine:ad.adLine||null,sourceChannel:ad.sourceChannel||null,sourceOrigin:ad.sourceOrigin||null})}return out}
+module.exports={isWon,transitionEvents};

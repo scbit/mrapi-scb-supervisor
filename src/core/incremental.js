@@ -1,39 +1,5 @@
-const crypto = require('crypto');
-const { asDate } = require('./time');
-
-function cursorWithLookback(cursor, lookbackMinutes, fallbackNow, fallbackHours = 24) {
-  const base = asDate(cursor);
-  if (base) return new Date(base.getTime() - Math.max(0, Number(lookbackMinutes || 0)) * 60000);
-  const now = asDate(fallbackNow) || new Date();
-  return new Date(now.getTime() - Math.max(1, Number(fallbackHours || 24)) * 3600000);
-}
-
-function newestDate(values, initial = null) {
-  let current = asDate(initial);
-  for (const value of values || []) {
-    const candidate = asDate(value);
-    if (candidate && (!current || candidate > current)) current = candidate;
-  }
-  return current;
-}
-
-function advanceCursor(previous, observedValues) {
-  const next = newestDate(observedValues, previous);
-  return next ? next.toISOString() : previous || null;
-}
-
-function stableFingerprint(value) {
-  function canonical(input) {
-    if (Array.isArray(input)) return input.map(canonical);
-    if (input && typeof input === 'object') {
-      return Object.keys(input).sort().reduce((acc, key) => {
-        acc[key] = canonical(input[key]);
-        return acc;
-      }, {});
-    }
-    return input;
-  }
-  return crypto.createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
-}
-
-module.exports = { cursorWithLookback, newestDate, advanceCursor, stableFingerprint };
+const crypto=require('crypto');const {asDate}=require('./time');
+function cursorWithLookback(cursor,m,now,h=24){const b=asDate(cursor);if(b)return new Date(b.getTime()-Math.max(0,+m||0)*60000);const n=asDate(now)||new Date();return new Date(n.getTime()-Math.max(1,+h||24)*3600000)}
+function advanceCursor(prev,vals){let d=asDate(prev);for(const v of vals||[]){const x=asDate(v);if(x&&(!d||x>d))d=x}return d?d.toISOString():prev||null}
+function stableFingerprint(v){function c(x){if(Array.isArray(x))return x.map(c);if(x&&typeof x==='object')return Object.keys(x).sort().reduce((a,k)=>(a[k]=c(x[k]),a),{});return x}return crypto.createHash('sha256').update(JSON.stringify(c(v))).digest('hex')}
+module.exports={cursorWithLookback,advanceCursor,stableFingerprint};
