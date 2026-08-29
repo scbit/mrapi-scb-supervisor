@@ -16,7 +16,7 @@ function evaluateSevereFollowUp(deal, config, asOf = new Date()) {
   const stage = normalizeStage(deal.stageNorm || deal.stage);
   const active = new Set((rules.active_stages || []).map(normalizeStage));
   const inactive = new Set((rules.inactive_stages || []).map(normalizeStage));
-  const overdueDays = daysOverdue(deal.dueDate, asOf);
+  const overdueDays = daysOverdue(deal.dueDate, asOf, config.timezone);
 
   const stageActive = active.has(stage);
   const stageInactive = inactive.has(stage) || deal.isClosed === true;

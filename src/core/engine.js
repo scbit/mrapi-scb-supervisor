@@ -5,6 +5,7 @@ const { aggregateSeller } = require('./aggregate');
 const { SellerIdentityResolver } = require('./sellerIdentity');
 const { localDayRange, localDateParts, asDate } = require('./time');
 const { cursorWithLookback, advanceCursor, stableFingerprint } = require('./incremental');
+const { buildRunDiagnostics } = require('./runDiagnostics');
 
 class SupervisorEngine {
   constructor({ config, inbox, crm, hunter, store }) {
@@ -47,6 +48,7 @@ class SupervisorEngine {
 
   async run({ now = new Date(), forceSince = null } = {}) {
     const runId = crypto.randomUUID();
+    const runStartedMs = Date.now();
     const cfg = this.config;
     const lookbackMinutes = Number(cfg.incremental.lookback_minutes || 120);
     const bootstrapHours = Number(cfg.incremental.bootstrap_hours || 24);
@@ -80,6 +82,7 @@ class SupervisorEngine {
       for (const user of hunterUsers) this.identities.registerHunterUser(user);
 
       // INBOX: changed conversations + fingerprint deduplication.
+      const inboxStartedMs = Date.now();
       const conversations = await this.inbox.listChangedConversations({
         since: inboxSince,
         limit: cfg.incremental.max_conversations_per_run
@@ -123,8 +126,10 @@ class SupervisorEngine {
       }
       const nextInboxCursor = advanceCursor(inboxCursor, conversations.map(x => x.lastMessageAt));
       if (nextInboxCursor) await this.store.saveCheckpoint({ cursor: nextInboxCursor, lastRunId: runId }, 'inbox');
+      const inboxDurationMs = Date.now() - inboxStartedMs;
 
       // CRM: only deals changed within the source window when the schema supports it.
+      const crmStartedMs = Date.now();
       const deals = await this.crm.listChangedDeals({ since: crmSince, limit: cfg.incremental.max_deals_per_run });
       const changedFollowUps = [];
       let skippedDeals = 0;
@@ -153,8 +158,10 @@ class SupervisorEngine {
       const nextCrmCursor = advanceCursor(crmCursor, deals.map(x => x.updatedAt));
       if (nextCrmCursor) await this.store.saveCheckpoint({ cursor: nextCrmCursor, lastRunId: runId }, 'crm');
       const followUps = await this.store.listActiveFollowUpFailures();
+      const crmDurationMs = Date.now() - crmStartedMs;
 
       // HUNTER: persist new/changed events, then aggregate the derived current-day state.
+      const hunterStartedMs = Date.now();
       const hunterChanged = await this.hunter.listChangedEvents({
         since: hunterSince,
         until: now,
@@ -181,6 +188,7 @@ class SupervisorEngine {
       const hunterPersisted = await this.store.listHunterEventsForDay(day.ymd, cfg.incremental.max_hunter_events_per_run * 2);
       const hunterRows = hunterPersisted.map(x => x.row).filter(Boolean);
       const hunterRaw = this.hunter.aggregateBySeller(hunterRows);
+      const hunterDurationMs = Date.now() - hunterStartedMs;
 
       // Daily aggregation must use the complete persisted current-day state, not only the
       // conversations returned by this incremental window. Otherwise unchanged conversations
@@ -231,6 +239,32 @@ class SupervisorEngine {
         sources: { inbox: nextInboxCursor, crm: nextCrmCursor, hunter: nextHunterCursor }
       }, 'core');
 
+      const diagnostics = buildRunDiagnostics({
+        counts: {
+          inbox: conversations.length,
+          crm: deals.length,
+          hunter: hunterChanged.length,
+          dailyState: persistedConversationStates.length
+        },
+        limits: {
+          inbox: Number(cfg.incremental.max_conversations_per_run),
+          crm: Number(cfg.incremental.max_deals_per_run),
+          hunter: Number(cfg.incremental.max_hunter_events_per_run),
+          dailyState: Number(cfg.incremental.max_daily_conversation_states || 5000)
+        },
+        skipped: {
+          inboxUnchanged: skippedUnchanged,
+          crmUnchanged: skippedDeals,
+          hunterUnchanged: skippedHunter
+        },
+        durationsMs: {
+          inbox: inboxDurationMs,
+          crm: crmDurationMs,
+          hunter: hunterDurationMs,
+          total: Date.now() - runStartedMs
+        }
+      });
+
       const summary = {
         runId,
         date: day.ymd,
@@ -246,11 +280,12 @@ class SupervisorEngine {
         persistedHunterEventsToday: hunterRows.length,
         sellers: sellers.length,
         clientsWaiting: sellers.reduce((a, s) => a + s.clientsWaiting, 0),
-        severeFollowUpFailures: followUps.length,
+        severeFollowUpFailures: followUps.filter(x => x.severe !== false && x.active !== false).length,
         hunterEventsToday: hunterRows.length,
         hunterManagements: hunterRows.filter(x => x.eventType !== 'task_state').length,
         identityDirectorySize: this.identities.snapshot().length,
-        sourceCursors: { inbox: nextInboxCursor, crm: nextCrmCursor, hunter: nextHunterCursor }
+        sourceCursors: { inbox: nextInboxCursor, crm: nextCrmCursor, hunter: nextHunterCursor },
+        diagnostics
       };
 
       await this.store.finishRun(runId, summary);

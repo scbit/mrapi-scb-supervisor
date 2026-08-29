@@ -1,5 +1,5 @@
 {
-  "snapshot": "0.4.0",
+  "snapshot": "0.5.0",
   "project": "SUPERVISOR SCB V3",
   "roadmap": "ROADMAP 1 — CORE DE SUPERVISIÓN COMERCIAL",
   "roadmap_id": "nFg3JnXtuzgKOn0Fvkz4",
@@ -17,5 +17,9 @@
     "read-only consumption endpoints for sellers, waiting conversations and severe follow-up failures"
   ],
   "next": "0.5.0 hardening, integration suite, cost safeguards and Roadmap 1 validation",
-  "orchestrator_reconnect_rule": "Inspect repository and tests first. Reconcile trusted evidence against this snapshot; do not reconstruct passing functionality."
+  "orchestrator_reconnect_rule": "Inspect repository and tests first. Reconcile trusted evidence against this snapshot; do not reconstruct passing functionality.",
+  "version": "0.5.0",
+  "status": "ROADMAP_1_RELEASE_CANDIDATE_MANUAL",
+  "manual_progress_note": "Hardening, diagnostics, core API auth, timezone fixes, validation suite. Requires MRAPI trusted-evidence verification before Roadmap COMPLETE.",
+  "roadmap1_validation_doc": "docs/ROADMAP1_VALIDATION.md"
 }

@@ -72,3 +72,15 @@ Version 0.4.0 integrates the three operational surfaces into reusable daily sell
 
 When Orchestrator reconnects, inspect current repository state and execute tests before deciding milestone status.
 Do not rebuild code that trusted evidence proves is already valid.
+
+
+## Manual snapshot 0.5.0
+
+Treat the repository as pre-existing implementation. Do not rebuild completed code by default.
+First inspect Git state, run tests, compare implementation with Roadmap 1 milestones, and use trusted evidence to determine which milestones are already satisfied.
+
+Important new hardening:
+- Core endpoints fail closed unless SUPERVISOR_API_TOKEN is configured (or auth is explicitly disabled only for controlled development).
+- Run diagnostics persist saturation warnings and timings.
+- `/api/core/status` exposes checkpoints/latest run only behind Core auth.
+- Roadmap 1 completion is intentionally NOT self-declared; see `docs/ROADMAP1_VALIDATION.md`.

@@ -25,12 +25,14 @@ function minutesBetween(a, b) {
   return Math.round((db.getTime() - da.getTime()) / 60000);
 }
 
-function daysOverdue(dueValue, asOf = new Date()) {
+function daysOverdue(dueValue, asOf = new Date(), timeZone = "America/Argentina/Buenos_Aires") {
   const due = asDate(dueValue);
   const now = asDate(asOf);
   if (!due || !now) return null;
-  const dueDay = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
-  const nowDay = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const dueParts = localDateParts(due, timeZone);
+  const nowParts = localDateParts(now, timeZone);
+  const dueDay = Date.UTC(Number(dueParts.year), Number(dueParts.month) - 1, Number(dueParts.day));
+  const nowDay = Date.UTC(Number(nowParts.year), Number(nowParts.month) - 1, Number(nowParts.day));
   return Math.max(0, Math.floor((nowDay - dueDay) / 86400000));
 }
 

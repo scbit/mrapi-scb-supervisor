@@ -94,7 +94,7 @@ Acelera Roadmap 1 incorporando infraestructura incremental por fuente:
 - agregación Hunter reconstruida desde estado derivado del día, no desde scans históricos;
 - resumen de ejecución con cursores y contadores por fuente.
 
-Este snapshot prepara el bloque siguiente (0.4.0), donde se consolidarán métricas integradas y agregación completa por vendedor.
+Este bloque histórico preparó la consolidación de métricas integradas y agregación completa por vendedor implementada posteriormente.
 
 
 ## v0.4.0 Core consumption surfaces
@@ -104,3 +104,30 @@ Este snapshot prepara el bloque siguiente (0.4.0), donde se consolidarán métri
 - `GET /api/core/follow-up-failures`
 
 The daily seller aggregation now rebuilds from persisted current-day derived state so incremental runs do not drop unchanged conversations from daily metrics.
+
+
+## Snapshot 0.5.0 — Roadmap 1 release candidate
+
+Hardening y cierre técnico del Core:
+
+- validación estricta de configuración y límites de lectura;
+- cálculo de vencimiento CRM respetando `America/Argentina/Buenos_Aires`;
+- diagnósticos por corrida: conteos, límites alcanzados, skips y duración por fuente;
+- `GET /api/core/status` con checkpoints y última corrida;
+- protección fail-closed de todos los endpoints `/api/core/*` mediante `SUPERVISOR_API_TOKEN`;
+- `SUPERVISOR_REQUIRE_AUTH=false` existe solamente para desarrollo controlado;
+- validación de `now` / `forceSince` y límite máximo de backfill manual;
+- tests de seguridad, configuración, timezone, diagnósticos e idempotencia lógica.
+
+### Seguridad de endpoints Core
+
+Por defecto `/api/core/*` queda bloqueado hasta configurar `SUPERVISOR_API_TOKEN`.
+Enviar el token en:
+
+```text
+x-supervisor-token: <secret>
+```
+
+No guardar el token en el repositorio. En Cloud Run debe configurarse mediante Secret Manager o un mecanismo equivalente autorizado.
+
+El endpoint `/` y `/health` permanecen públicos y no exponen conversaciones ni datos comerciales.

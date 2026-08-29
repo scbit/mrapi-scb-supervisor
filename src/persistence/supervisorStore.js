@@ -119,6 +119,18 @@ class SupervisorStore {
       .sort((a, b) => Number(b.waitingMinutes || 0) - Number(a.waitingMinutes || 0)).slice(0, limit);
   }
 
+  async getLatestRun() {
+    try {
+      const snap = await this.db.collection(this.collections.runs)
+        .orderBy('startedAt', 'desc').limit(1).get();
+      if (snap.empty) return null;
+      const doc = snap.docs[0];
+      return { id: doc.id, ...doc.data() };
+    } catch (_) {
+      return null;
+    }
+  }
+
   async startRun(runId, data) {
     await this.db.collection(this.collections.runs).doc(runId).set({ ...data, status: 'RUNNING', startedAt: new Date().toISOString() });
   }
