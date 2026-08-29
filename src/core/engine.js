@@ -327,14 +327,18 @@ class SupervisorEngine {
       // pending-assignment/ad-referral fields existed. This does NOT scan Inbox.
       // It reads only the exact source conversation documents referenced by current unknown waits.
       let pendingAssignmentBackfilled = 0;
-      const pendingBackfillCheckpoint = await this.store.getCheckpoint('pending_assignment_backfill_v1');
+      let pendingAssignmentBackfillNotFound = 0;
+      const pendingBackfillCheckpoint = await this.store.getCheckpoint('pending_assignment_backfill_v2');
       if (!pendingBackfillCheckpoint?.complete) {
         const legacyUnknownWaits = await this.store.listUnassignedWaitingConversationStates(
           Math.min(100, Number(cfg.incremental.max_current_conversation_states || 5000))
         );
         for (const state of legacyUnknownWaits) {
           const sourceConversation = await this.inbox.getConversation(state.id);
-          if (!sourceConversation || !state.metrics) continue;
+          if (!sourceConversation || !state.metrics) {
+            pendingAssignmentBackfillNotFound += 1;
+            continue;
+          }
 
           const assignment = assignmentState(sourceConversation, {
             pendingAssignmentStages: cfg.assignment?.pending_stages || [],
@@ -373,8 +377,9 @@ class SupervisorEngine {
         await this.store.saveCheckpoint({
           complete: true,
           processed: pendingAssignmentBackfilled,
+          notFound: pendingAssignmentBackfillNotFound,
           lastRunId: runId
-        }, 'pending_assignment_backfill_v1');
+        }, 'pending_assignment_backfill_v2');
       }
 
       const currentWaitingStates = await this.store.listCurrentWaitingConversationStates(
@@ -497,6 +502,7 @@ class SupervisorEngine {
         unassignedWaitingConversations: currentWaitingMetrics.filter(x => (x.seller?.id || 'unknown') === 'unknown' && x.pendingAssignment !== true).length,
         remappedUnassigned,
         pendingAssignmentBackfilled,
+        pendingAssignmentBackfillNotFound,
         crmMode,
         crmBootstrapRemaining,
         crmBootstrapAfterId: crmBootstrapPage?.lastDocId || crmBootstrap?.afterId || null,

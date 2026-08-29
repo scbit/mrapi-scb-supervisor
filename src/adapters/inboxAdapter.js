@@ -15,9 +15,34 @@ class InboxAdapter {
   }
 
   async getConversation(conversationId) {
-    const doc = await this.db.collection("conversations").doc(String(conversationId)).get();
-    if (!doc.exists) return null;
-    return normalizeConversation(doc.id, doc.data());
+    const raw = String(conversationId || "").trim();
+    const parts = raw.split("__");
+    const candidates = [];
+    const add = (value) => {
+      const v = String(value || "").trim();
+      if (v && !candidates.includes(v)) candidates.push(v);
+    };
+
+    add(raw);
+    if (parts.length === 2) {
+      const left = parts[0].replace(/^\+/, "");
+      const right = parts[1].replace(/^\+/, "");
+      add(`${left}__${right}`);
+      add(`+${left}__${right}`);
+      add(`${left}__+${right}`);
+      add(`+${left}__+${right}`);
+    }
+
+    for (const id of candidates) {
+      const doc = await this.db.collection("conversations").doc(id).get();
+      if (doc.exists) {
+        const normalized = normalizeConversation(doc.id, doc.data());
+        normalized.lookupMatchedId = id;
+        normalized.lookupCandidatesTried = candidates;
+        return normalized;
+      }
+    }
+    return null;
   }
 
   async getMessages(conversationId, limit) {

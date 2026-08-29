@@ -207,3 +207,11 @@ No additional source scans were introduced. Existing read budgets remain unchang
 - No Inbox collection scan and no historical message scan.
 - Reclassifies legacy states as pending-assignment/assigned using current source stage/owner/deal.
 - Backfills real Meta Ad referral fields from the source conversation document.
+
+## 0.5.12 — Conversation ID lookup fix
+
+The pending-assignment backfill now resolves Inbox conversation IDs using the observed
+with-plus / without-plus variants (e.g. `549...__549...` and `+549...__+549...`).
+A fresh checkpoint `pending_assignment_backfill_v2` forces one bounded retry even if v1
+completed without matching documents. The run summary reports `pendingAssignmentBackfillNotFound`.
+No collection scan or historical message scan is added.
