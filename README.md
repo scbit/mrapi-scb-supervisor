@@ -186,3 +186,15 @@ La raíz `/` ahora muestra un index simple con botón directo a `/validate` y ac
 - Added protected endpoint `/api/core/pending-assignment`.
 - Pending-assignment chats stay outside seller rankings until a real owner/deal exists.
 - Read budgets from 0.5.7 are unchanged.
+
+## 0.5.10 — Real Meta Ad referral mapping
+
+Mapped the actual Inbox conversation fields:
+- referralSourceType -> sourceOrigin
+- referralHeadline -> adTitle
+- referralBody -> adText
+- referralAdId -> adId
+- requestedLineId -> adLine
+- referralCtwaClid -> referralCtwaClid
+
+No additional source scans were introduced. Existing read budgets remain unchanged.

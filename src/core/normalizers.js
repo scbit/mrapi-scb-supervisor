@@ -87,11 +87,12 @@ function normalizeConversation(id, d = {}) {
     lastOutboundAt: toIso(d.lastOutboundAt),
     leadPlatform: text(d, ["leadPlatform"]) || null,
     sourceChannel: text(d, ["sourceChannel", "channel", "canal"]) || null,
-    sourceOrigin: text(d, ["sourceOrigin", "origin", "origen"]) || null,
-    adTitle: text(d, ["adTitle", "leadAdTitle", "titleAd", "ad_title"]) || null,
-    adText: text(d, ["adText", "leadAdText", "adBody", "ad_text"]) || null,
-    adId: text(d, ["adId", "ad_id", "metaAdId", "leadAdId"]) || null,
-    adLine: text(d, ["adLine", "line", "lineId", "whatsappLine"]) || null,
+    sourceOrigin: text(d, ["referralSourceType", "sourceOrigin", "origin", "origen"]) || null,
+    adTitle: text(d, ["referralHeadline", "adTitle", "leadAdTitle", "titleAd", "ad_title"]) || null,
+    adText: text(d, ["referralBody", "adText", "leadAdText", "adBody", "ad_text"]) || null,
+    adId: text(d, ["referralAdId", "adId", "ad_id", "metaAdId", "leadAdId"]) || null,
+    adLine: text(d, ["requestedLineId", "adLine", "line", "lineId", "whatsappLine"]) || null,
+    referralCtwaClid: text(d, ["referralCtwaClid"]) || null,
     owner: text(d, ["owner", "ownerEmail", "assignedTo", "seller", "vendedor", "responsible"]) || null
   };
 }

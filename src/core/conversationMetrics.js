@@ -59,6 +59,13 @@ function messageFingerprint(conversation, messages) {
     owner: conversation.owner || null,
     dealId: conversation.dealId || null,
     contactId: conversation.contactId || null,
+    sourceChannel: conversation.sourceChannel || null,
+    sourceOrigin: conversation.sourceOrigin || null,
+    adTitle: conversation.adTitle || null,
+    adText: conversation.adText || null,
+    adId: conversation.adId || null,
+    adLine: conversation.adLine || null,
+    referralCtwaClid: conversation.referralCtwaClid || null,
     messages: (messages || []).map(m => [m.id, m.timestamp, m.direction, m.actor, m.user])
   };
   return crypto.createHash("sha256").update(JSON.stringify(payload)).digest("hex");
@@ -142,6 +149,7 @@ function analyzeConversation(conversation, messages, options = {}) {
     adText: conversation.adText || null,
     adId: conversation.adId || null,
     adLine: conversation.adLine || conversation.lineId || null,
+    referralCtwaClid: conversation.referralCtwaClid || null,
     pendingAssignment: assignment.pendingAssignment,
     assignmentState: assignment.assignmentState,
     assignmentReason: assignment.assignmentReason,
