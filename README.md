@@ -46,3 +46,13 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Cada caso relevante incluye botón **Ver conversación** con `https://hub.sentirecustomsbroker.com/?conversationId=<conversationId>`.
 - `HUB_BASE_URL` puede configurarse por entorno; usa el HUB productivo como valor por defecto.
 - Fuentes operativas permanecen READ ONLY.
+
+## v0.8.5 — Calidad de Leads desde CRM
+
+- Replica la semántica de **Mi Estado Comercial > Calidad de los leads ingresados**.
+- Source of truth: `bscrmscb/deals.leadQuality` (READ ONLY).
+- Valores oficiales: `DESCARTADO`, `NO_RESPONDE`, `REGULAR`, `BUENO`, `EXCELENTE`.
+- Para el Daily se toman los deals cuyo `createdAt` cae dentro del día seleccionado en horario Buenos Aires y se usa la calidad actual del trato, igual que CRM.
+- Agrega total, distribución por calidad, `% Bueno + Excelente` y desglose por vendedor al texto y email del Daily.
+- Si la lectura CRM falla, el reporte muestra **dato no disponible**; nunca infiere ni inventa calidad con IA.
+- No agrega escrituras en CRM ni cambia reglas del pipeline.
