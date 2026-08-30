@@ -1,0 +1,12 @@
+const test=require('node:test');
+const assert=require('node:assert/strict');
+const fs=require('fs');
+const {analyzeConversation,needsAi,applyAi}=require('../src/core/dailyGerencial');
+const {OpenAIAdapter}=require('../src/adapters/openaiAdapter');
+const {TelegramAdapter}=require('../src/adapters/telegramAdapter');
+const range={from:new Date('2026-08-28T09:00:00-03:00'),to:new Date('2026-08-28T16:59:59.999-03:00'),fullFrom:new Date('2026-08-28T00:00:00-03:00'),fullTo:new Date('2026-08-28T23:59:59.999-03:00')};
+test('legacy daily semantics detect human response and AI eligibility',()=>{const row=analyzeConversation({id:'c1',owner:'a@scb.com'},[{timestamp:'2026-08-28T10:00:00-03:00',actor:'client',text:'quiero importar'},{timestamp:'2026-08-28T10:10:00-03:00',actor:'human',user:'a@scb.com',text:'peso y medidas?'}],range,30);assert.equal(row.humanResponded,true);assert.equal(needsAi(row),true)});
+test('AI consultative fields mark operational without discovery',()=>{const row=applyAi({humanResponded:true,humanTexts:[{text:'peso?'}]}, {overall_score:55,result:'regular',commercial_discovery_level:'bajo',did_ask_business_context:false,did_ask_volume_potential:false,operational_without_discovery:true,unexplored_potential:true,bad_points:[]});assert.equal(row.operationalWithoutDiscovery,true);assert.equal(row.needsReviewByAi,true)});
+test('OpenAI adapter exposes configured model without leaking key',()=>{const a=new OpenAIAdapter({OPENAI_API_KEY:'secret',OPENAI_MODEL:'model-x'});assert.deepEqual(a.configStatus(),{configured:true,model:'model-x'});assert.equal(JSON.stringify(a.configStatus()).includes('secret'),false)});
+test('Telegram adapter splits long daily report',()=>{const a=new TelegramAdapter({TELEGRAM_BOT_TOKEN:'x',TELEGRAM_CHAT_ID:'1'},async()=>({ok:true,json:async()=>({ok:true,result:{message_id:1}})}));assert.ok(a.split('x'.repeat(9000)).length>=3)});
+test('0.8.0 UI uses persistent batch daily supervisor flow',()=>{const html=fs.readFileSync('public/index.html','utf8');for(const s of ['v0.8.0','Ejecutar supervisor diario','/api/supervisor/daily/start','/api/supervisor/daily/process','OPENAI_API_KEY'])assert.ok(html.includes(s),s)});

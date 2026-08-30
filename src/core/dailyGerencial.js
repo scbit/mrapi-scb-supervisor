@@ -1,110 +1,76 @@
-const {cleanSellerLabel,aggregatePortfolio,aggregateFollowUps,humanDuration}=require('./report');
-const {localDayRange}=require('./time');
+const {aggregatePortfolio,aggregateFollowUps,humanDuration,cleanSellerLabel}=require('./report');
 
 function norm(v){return String(v||'').trim().toLowerCase()}
-function ymdArgentina(date=new Date(),timezone='America/Argentina/Buenos_Aires'){
-  const parts=new Intl.DateTimeFormat('en-CA',{timeZone:timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);
-  const get=t=>parts.find(x=>x.type===t)?.value;
-  return `${get('year')}-${get('month')}-${get('day')}`;
+function localDayRange(date,startHour=9,endHour=17){
+  const fullFrom=new Date(`${date}T00:00:00.000-03:00`),fullTo=new Date(`${date}T23:59:59.999-03:00`);
+  const from=new Date(`${date}T${String(startHour).padStart(2,'0')}:00:00.000-03:00`),to=new Date(`${date}T${String(endHour).padStart(2,'0')}:00:00.000-03:00`);
+  return{fullFrom,fullTo,from,to:new Date(to.getTime()-1),label:`${String(startHour).padStart(2,'0')}:00 a ${String(endHour).padStart(2,'0')}:00`};
 }
-function businessRange(date,config){
-  const start=String(config.business_hours?.start||'09:00');
-  const end=String(config.business_hours?.end||'17:00');
-  const from=new Date(`${date}T${start}:00-03:00`);
-  const to=new Date(`${date}T${end}:00-03:00`);
-  const fullFrom=new Date(`${date}T00:00:00-03:00`);
-  const fullTo=new Date(`${date}T23:59:59.999-03:00`);
-  return{from,to,fullFrom,fullTo,label:`${start}–${end}`};
-}
-function minutes(a,b){const x=new Date(a).getTime(),y=new Date(b).getTime();if(!Number.isFinite(x)||!Number.isFinite(y)||y<x)return null;return Math.round((y-x)/60000)}
 function inRange(iso,from,to){const t=new Date(iso||0).getTime();return Number.isFinite(t)&&t>=from.getTime()&&t<=to.getTime()}
-function analyzeDailyConversation(conversation,messages,range,lateMinutes=30){
+function mins(a,b){const x=new Date(a||0).getTime(),y=new Date(b||0).getTime();if(!Number.isFinite(x)||!Number.isFinite(y)||y<x)return null;return Math.round((y-x)/60000)}
+function actor(m){return m?.actor||'unknown'}
+function sellerName(c,messages){const human=[...(messages||[])].reverse().find(m=>actor(m)==='human'&&m.user);return human?.user||c.owner||''}
+function textForReport(m){const t=String(m?.text||'').replace(/\s+/g,' ').trim();return t||''}
+
+function analyzeConversation(conversation,messages,range,lateMinutes=30){
   const all=(messages||[]).filter(m=>m.timestamp).slice().sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
-  const work=all.filter(m=>inRange(m.timestamp,range.from,range.to));
-  const inbound=work.filter(m=>m.actor==='client');
-  const bots=work.filter(m=>m.actor==='bot');
-  const humans=work.filter(m=>m.actor==='human');
-  let pendingAt=null,pendingText='',responses=[],lastHuman=null,lastClient=null;
-  for(const m of work){
-    if(m.actor==='client'){
-      lastClient=m;
-      if(!pendingAt){pendingAt=m.timestamp;pendingText=m.text||''}
-    }else if(m.actor==='human'){
-      lastHuman=m;
-      if(pendingAt){const mins=minutes(pendingAt,m.timestamp);responses.push({minutes:mins,inboundAt:pendingAt,humanAt:m.timestamp,seller:m.user||conversation.owner||'',customerText:pendingText,humanText:m.text||''});pendingAt=null;pendingText=''}
-    }
+  const win=all.filter(m=>inRange(m.timestamp,range.from,range.to));
+  const inbound=win.filter(m=>actor(m)==='client'),bot=win.filter(m=>actor(m)==='bot'),human=win.filter(m=>actor(m)==='human');
+  const seller=sellerName(conversation,all)||conversation.owner||'No detectado';
+  const lastWin=win.at(-1)||null,lastClient=[...win].reverse().find(m=>actor(m)==='client')||null,lastHuman=[...win].reverse().find(m=>actor(m)==='human')||null,lastBot=[...win].reverse().find(m=>actor(m)==='bot')||null;
+  const lastClientAll=[...all].reverse().find(m=>actor(m)==='client')||null,lastHumanAll=[...all].reverse().find(m=>actor(m)==='human')||null;
+  const humanAfterLastClient=lastClientAll?all.filter(m=>actor(m)==='human'&&new Date(m.timestamp)>new Date(lastClientAll.timestamp)):[];
+  const followUpAttemptsAfterLastClient=humanAfterLastClient.length;
+  const followUpAttemptsInWindow=humanAfterLastClient.filter(m=>inRange(m.timestamp,range.from,range.to)).length;
+  const sellerFollowUpInWindow=human.length>0&&inbound.length===0&&!!lastClientAll;
+  const readyToDiscardNoResponse=followUpAttemptsAfterLastClient>=10&&!!lastClientAll&&(!lastHumanAll||new Date(lastHumanAll.timestamp)>new Date(lastClientAll.timestamp));
+  const followUpOk=sellerFollowUpInWindow&&followUpAttemptsAfterLastClient>0&&followUpAttemptsAfterLastClient<10;
+  const responseTimes=[],lateResponses=[];let pendingClientMessages=0;
+  for(let i=0;i<win.length;i++){
+    const m=win[i];if(actor(m)!=='client')continue;
+    const nextHuman=win.slice(i+1).find(x=>actor(x)==='human');
+    const nextAnyOut=win.slice(i+1).find(x=>['human','bot','outbound_unknown'].includes(actor(x)));
+    if(nextHuman){const mm=mins(m.timestamp,nextHuman.timestamp);if(mm!==null){responseTimes.push(mm);if(mm>lateMinutes)lateResponses.push({inboundAt:m.timestamp,humanAt:nextHuman.timestamp,minutes:mm,customerText:textForReport(m).slice(0,240),humanText:textForReport(nextHuman).slice(0,240),seller:nextHuman.user||seller})}}
+    else if(!nextAnyOut||actor(nextAnyOut)==='bot')pendingClientMessages++;
   }
-  let afterHours=false,businessCloseGrace=false;
-  if(pendingAt){
-    const nextHuman=all.find(m=>m.actor==='human'&&new Date(m.timestamp)>new Date(pendingAt)&&new Date(m.timestamp)<=range.fullTo);
-    if(nextHuman){const mins=minutes(pendingAt,nextHuman.timestamp);responses.push({minutes:mins,inboundAt:pendingAt,humanAt:nextHuman.timestamp,seller:nextHuman.user||conversation.owner||'',customerText:pendingText,humanText:nextHuman.text||''});lastHuman=nextHuman;pendingAt=null;pendingText='';afterHours=new Date(nextHuman.timestamp)>range.to}
+  let humanResponded=human.length>0,botOnly=inbound.length>0&&bot.length>0&&!humanResponded,noHumanResponse=inbound.length>0&&!humanResponded;
+  let respondedOutsideBusinessHours=false,businessCloseGrace=false,afterHoursHumanAt='';
+  if(noHumanResponse&&lastClient){
+    const nextHuman=all.find(m=>actor(m)==='human'&&new Date(m.timestamp)>new Date(lastClient.timestamp));
+    if(nextHuman){humanResponded=true;botOnly=false;noHumanResponse=false;pendingClientMessages=0;respondedOutsideBusinessHours=new Date(nextHuman.timestamp)>range.to;afterHoursHumanAt=nextHuman.timestamp;const mm=mins(lastClient.timestamp,nextHuman.timestamp);if(mm!==null){responseTimes.push(mm);if(mm>lateMinutes)lateResponses.push({inboundAt:lastClient.timestamp,humanAt:nextHuman.timestamp,minutes:mm,customerText:textForReport(lastClient).slice(0,240),humanText:textForReport(nextHuman).slice(0,240),seller:nextHuman.user||seller})}}
   }
-  if(pendingAt){const avail=minutes(pendingAt,range.to.toISOString());if(avail!==null&&avail<lateMinutes)businessCloseGrace=true}
-  const responseMinutes=responses.map(x=>x.minutes).filter(Number.isFinite);
-  const lateResponses=responseMinutes.filter(x=>x>lateMinutes);
-  const humanResponded=responses.length>0||humans.length>0;
-  const noHumanResponse=inbound.length>0&&!humanResponded&&!businessCloseGrace;
-  const botOnly=inbound.length>0&&bots.length>0&&!humanResponded&&!businessCloseGrace;
-  const seller=lastHuman?.user||humans.at(-1)?.user||conversation.owner||'sin asignar';
-  return{
-    conversationId:conversation.id,contactName:conversation.contactName||conversation.phone||'Sin nombre',owner:conversation.owner||null,seller,
-    clientMessages:inbound.length,humanMessages:humans.length,botMessages:bots.length,humanResponded,noHumanResponse,botOnly,businessCloseGrace,respondedOutsideBusinessHours:afterHours,
-    responseCount:responseMinutes.length,lateCount:lateResponses.length,avgResponseMinutes:responseMinutes.length?Math.round(responseMinutes.reduce((a,b)=>a+b,0)/responseMinutes.length):null,maxResponseMinutes:responseMinutes.length?Math.max(...responseMinutes):null,
-    lastClientAt:lastClient?.timestamp||null,lastHumanAt:lastHuman?.timestamp||humans.at(-1)?.timestamp||null
-  };
+  if(noHumanResponse&&lastClient){const available=mins(lastClient.timestamp,range.to.toISOString());if(available!==null&&available<lateMinutes){businessCloseGrace=true;noHumanResponse=false;botOnly=false;pendingClientMessages=0}}
+  const avg=responseTimes.length?Math.round(responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length):null,max=responseTimes.length?Math.max(...responseTimes):null;
+  return{conversationId:conversation.id,contactName:conversation.contactName||conversation.phone||'sin dato',phone:conversation.phone||'',owner:conversation.owner||seller,seller,stage:conversation.stage||'',dealId:conversation.dealId||'',sourceChannel:conversation.sourceChannel||'',messagesInWindow:win.length,inboundCount:inbound.length,botCount:bot.length,humanCount:human.length,humanResponded,botOnly,noHumanResponse,needsHumanNow:noHumanResponse||botOnly||pendingClientMessages>0,pendingClientMessages,avgHumanResponseMinutes:avg,avgResponseMinutes:avg,maxHumanResponseMinutes:max,lateCount:lateResponses.length,lateResponses,lastActor:lastWin?actor(lastWin):'',lastClientAt:lastClient?.timestamp||'',lastHumanAt:lastHuman?.timestamp||'',lastBotAt:lastBot?.timestamp||'',lastClientText:textForReport(lastClient).slice(0,300),lastHumanText:textForReport(lastHuman).slice(0,300),humanTexts:human.slice(-3).map(m=>({at:m.timestamp,user:m.user||seller,text:textForReport(m).slice(0,500)})),followUpAttemptsAfterLastClient,followUpAttemptsInWindow,sellerFollowUpInWindow,followUpOk,readyToDiscardNoResponse,respondedOutsideBusinessHours,businessCloseGrace,afterHoursHumanAt};
 }
-function sellerLabel(owner,userMap){return cleanSellerLabel(userMap.get(norm(owner))||owner||'Sin asignar')}
-function aggregateAttention(rows,userMap){
-  const m=new Map();
-  for(const r of rows){
-    const key=norm(r.seller||r.owner||'sin asignar');
-    if(!m.has(key))m.set(key,{owner:key,label:sellerLabel(r.seller||r.owner,userMap),clientChats:0,humanResponded:0,noHumanResponse:0,botOnly:0,late:0,afterHours:0,responseMinutes:[]});
-    const x=m.get(key);x.clientChats++;if(r.humanResponded)x.humanResponded++;if(r.noHumanResponse)x.noHumanResponse++;if(r.botOnly)x.botOnly++;x.late+=r.lateCount||0;if(r.respondedOutsideBusinessHours)x.afterHours++;if(Number.isFinite(r.avgResponseMinutes))x.responseMinutes.push(r.avgResponseMinutes);
-  }
-  return[...m.values()].map(x=>({...x,avgResponseMinutes:x.responseMinutes.length?Math.round(x.responseMinutes.reduce((a,b)=>a+b,0)/x.responseMinutes.length):null})).sort((a,b)=>b.noHumanResponse-a.noHumanResponse||b.late-a.late||b.clientChats-a.clientChats);
-}
-function telegramText(r){
-  const L=[];
-  L.push(`📊 SUPERVISOR SCB — CIERRE GERENCIAL`,`${r.date} · ${r.businessHours}`,'');
-  L.push('📥 ATENCIÓN DEL DÍA','',`Conversaciones con clientes: ${r.attention.clientChats}`,`Respondidas por humano: ${r.attention.humanResponded}`,`Sin respuesta humana: ${r.attention.noHumanResponse}`,`Solo bot: ${r.attention.botOnly}`,`Respuestas tarde (+${r.lateMinutes} min): ${r.attention.late}`,`Respondidas fuera de horario: ${r.attention.afterHours}`,`Tiempo promedio respuesta: ${r.attention.avgResponseMinutes===null?'—':humanDuration(r.attention.avgResponseMinutes)}`,'');
-  L.push('📊 CARTERA AL CIERRE','',`Vigentes: ${r.portfolio.total}`,`🟢 Al día: ${r.portfolio.upToDate}`,`🔴 Vencidos: ${r.portfolio.overdue}`,`⚪ Sin fecha: ${r.portfolio.noDueDate}`,'');
-  L.push('🎯 HUNTER','',`Gestiones del día: ${r.hunter.total}`,`Vendedores con gestiones: ${r.hunter.sellers}`,'');
-  L.push('🔥 OPORTUNIDADES','',`Nuevos HORNO: ${r.events.HORNO}`,`🏆 Nuevos GANADO: ${r.events.GANADO}`,`📣 GANADO desde publicidad: ${r.events.GANADO_FROM_AD}`,'');
-  L.push('👥 VENDEDORES A REVISAR','');
-  const review=r.bySeller.filter(x=>x.noHumanResponse||x.late).slice(0,10);
-  if(!review.length)L.push('Sin casos destacados.');
-  else for(const s of review)L.push(`${s.label} — ${s.clientChats} chats | ${s.noHumanResponse} sin respuesta | ${s.late} tarde`);
-  L.push('','🧠 CALIDAD COMERCIAL','',`Evaluación IA: ${r.aiQuality.status}`,r.aiQuality.note);
-  return L.join('\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,4090);
-}
+function needsAi(row){return !!(row.humanResponded&&row.humanTexts?.length&&(row.inboundCount>0||row.lateCount>0))}
+function arr(v){return Array.isArray(v)?v:[]}
+function applyAi(row,ai){if(!ai)return row;const level=String(ai.commercial_discovery_level||'sin_dato').toLowerCase(),risk=String(ai.commercial_risk||ai.risk_level||'sin_dato').toLowerCase(),result=String(ai.result||'').toLowerCase();const operational=ai.operational_without_discovery===true||(row.humanResponded&&['bajo','nulo'].includes(level)&&!ai.did_ask_business_context&&!ai.did_ask_volume_potential);const unexplored=ai.unexplored_potential===true||arr(ai.missed_discovery_questions).length>0;const good=row.humanResponded&&['alto','medio'].includes(level)&&(ai.did_ask_business_context||ai.did_ask_volume_potential||ai.did_ask_import_experience||ai.did_detect_customer_profile)&&risk!=='alto'&&result!=='mal';const needs=result==='mal'||risk==='alto'||operational||unexplored||Number(ai.overall_score||100)<65||arr(ai.bad_points).length>0;return{...row,ai:{...ai,commercialDiscoveryLevel:level,commercialRisk:risk},needsReviewByAi:needs,operationalWithoutDiscovery:operational,unexploredPotential:unexplored,goodCommercialResponse:good,commercialDiscoveryLevel:level,commercialRisk:risk}}
+function exclusionReason(c,row,messages){const owner=norm(row?.seller||row?.owner||c.owner);if(owner==='basura@sentirecustomsbroker.com')return'owner_excluido_basura';const hay=((messages||[]).filter(m=>actor(m)==='client').map(m=>m.text||'').join(' ')+' '+(c.contactName||'')).toLowerCase();return['curriculum','currículum','enviar cv','mandar cv','busco trabajo','busco laburo','vacante','oferta laboral','toman choferes'].some(k=>hay.includes(k))?'consulta_empleo_cv':''}
+function summary(rows){const map=new Map();for(const r of rows){const k=r.seller||r.owner||'No detectado',s=map.get(k)||{seller:k,activeChats:0,clientChats:0,humanResponded:0,botOnly:0,noHumanResponse:0,late:0,needsReviewByAi:0,okHuman:0,goodCommercial:0,operationalWithoutDiscovery:0,unexploredPotential:0,followUpOk:0,readyToDiscardNoResponse:0,maxDelayMinutes:0,lastClients:[]};s.activeChats++;if(r.inboundCount>0)s.clientChats++;if(r.humanResponded)s.humanResponded++;if(r.botOnly)s.botOnly++;if(r.noHumanResponse)s.noHumanResponse++;if(r.lateCount>0)s.late++;if(r.needsReviewByAi)s.needsReviewByAi++;if(r.goodCommercialResponse)s.goodCommercial++;if(r.operationalWithoutDiscovery)s.operationalWithoutDiscovery++;if(r.unexploredPotential)s.unexploredPotential++;if(r.followUpOk)s.followUpOk++;if(r.readyToDiscardNoResponse)s.readyToDiscardNoResponse++;if(r.humanResponded&&!r.needsReviewByAi&&!(r.lateCount>0))s.okHuman++;if(Number.isFinite(r.maxHumanResponseMinutes))s.maxDelayMinutes=Math.max(s.maxDelayMinutes,r.maxHumanResponseMinutes);if(r.inboundCount>0&&s.lastClients.length<5)s.lastClients.push(r.contactName);map.set(k,s)}return[...map.values()].map(s=>{const responseRate=s.clientChats?Math.round(s.humanResponded/s.clientChats*100):null;let evaluation='OK';if(s.noHumanResponse>0||s.needsReviewByAi>0||s.operationalWithoutDiscovery>0||s.unexploredPotential>0||s.readyToDiscardNoResponse>0)evaluation='REVISAR';if(s.clientChats>=1&&s.humanResponded===0&&s.followUpOk===0&&s.readyToDiscardNoResponse===0)evaluation='URGENTE';return{...s,responseRate,evaluation}}).sort((a,b)=>(({URGENTE:0,REVISAR:1,OK:2}[a.evaluation]??9)-({URGENTE:0,REVISAR:1,OK:2}[b.evaluation]??9))||b.noHumanResponse-a.noHumanResponse||b.clientChats-a.clientChats)}
+function status(r){if(r.readyToDiscardNoResponse)return'DESCARTAR SIN RESPUESTA';if(r.followUpOk)return'SEGUIMIENTO OK';if(r.businessCloseGrace)return'PENDIENTE CIERRE';if(r.respondedOutsideBusinessHours)return'RESPUESTA FUERA DE HORARIO';if(r.operationalWithoutDiscovery)return'RESPONDIÓ SIN INDAGAR';if(r.unexploredPotential)return'POTENCIAL NO EXPLORADO';if(r.needsReviewByAi)return'REVISAR RESPUESTA';if(r.noHumanResponse)return'SIN RESPUESTA HUMANA';if(r.botOnly)return'SOLO BOT';if(r.lateCount>0)return'RESPUESTA TARDE';if(r.goodCommercialResponse)return'BUENA RESPUESTA COMERCIAL';if(r.humanResponded)return'RESPONDIDO OK';return'CLIENTE ACTIVO'}
+function managerText(report){const r=report.rows||[],s=report.bySeller||[];const count=f=>r.filter(f).length;const sellerLines=s.map((x,i)=>`${i+1}) ${cleanSellerLabel(x.seller)} — ${x.evaluation}\n   Clientes: ${x.clientChats} | Humano: ${x.humanResponded}${x.responseRate===null?'':` (${x.responseRate}%)`} | Sin respuesta: ${x.noHumanResponse} | Tarde: ${x.late}\n   Comercial bueno: ${x.goodCommercial} | Sin indagar: ${x.operationalWithoutDiscovery} | Potencial no explorado: ${x.unexploredPotential}\n   Seguimiento OK: ${x.followUpOk} | Para descartar: ${x.readyToDiscardNoResponse}`).join('\n\n');const priority=r.filter(x=>x.noHumanResponse||x.botOnly||x.operationalWithoutDiscovery||x.unexploredPotential||x.needsReviewByAi||x.lateCount>0||x.readyToDiscardNoResponse).slice(0,40).map((x,i)=>`${i+1}) ${status(x)} — ${x.contactName}\n   Vendedor: ${cleanSellerLabel(x.seller)}\n   Cliente: ${x.lastClientText||'-'}\n   Humano: ${x.lastHumanText||'-'}\n   Coaching: ${x.ai?.sales_coaching||'-'}`).join('\n\n');return `📊 SCB SUPERVISOR — REPORTE DIARIO GERENCIAL\nFecha: ${report.date}\nHorario evaluado: ${report.businessHours} Argentina\nUmbral tarde: +${report.lateMinutes} min\n\nRESUMEN GENERAL\n- Conversaciones activas: ${r.length}\n- Conversaciones donde escribió cliente: ${count(x=>x.inboundCount>0)}\n- Respondidas por humano: ${count(x=>x.humanResponded)}\n- Buenas respuestas comerciales: ${count(x=>x.goodCommercialResponse)}\n- Respuestas operativas sin indagar: ${count(x=>x.operationalWithoutDiscovery)}\n- Potencial comercial no explorado: ${count(x=>x.unexploredPotential)}\n- Solo bot: ${count(x=>x.botOnly)}\n- Sin respuesta humana: ${count(x=>x.noHumanResponse)}\n- Respuestas tarde: ${count(x=>x.lateCount>0)}\n- Seguimientos correctos: ${count(x=>x.followUpOk)}\n- Para descartar tras seguimiento: ${count(x=>x.readyToDiscardNoResponse)}\n- Analizados con IA: ${report.aiUsedCount||0}\n\n📊 CARTERA ACTUAL\nVigentes: ${report.portfolio.total} | 🟢 Al día: ${report.portfolio.upToDate} | 🔴 Vencidos: ${report.portfolio.overdue} | ⚪ Sin fecha: ${report.portfolio.noDueDate}\n\n🎯 HUNTER\nGestiones del día: ${report.hunter.total} | Vendedores: ${report.hunter.sellers}\n\n🔥 OPORTUNIDADES\nHORNO: ${report.events.HORNO} | GANADO: ${report.events.GANADO} | Desde publicidad: ${report.events.GANADO_FROM_AD}\n\nRANKING POR VENDEDOR\n${sellerLines||'-'}\n\nCASOS IMPORTANTES\n${priority||'Sin casos importantes detectados.'}`}
 function esc(v){return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
-function metric(label,value,color='#101828'){return `<td width="25%" valign="top" style="padding:8px"><div style="font-family:Arial;font-size:12px;color:#667085">${esc(label)}</div><div style="font-family:Arial;font-size:22px;font-weight:700;color:${color};margin-top:3px">${esc(value)}</div></td>`}
-function section(title,body){return `<tr><td style="padding:0 0 18px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e4e7ec;border-radius:12px"><tr><td style="padding:18px 20px 10px;font-family:Arial;font-size:18px;font-weight:700;color:#101828">${title}</td></tr><tr><td style="padding:0 20px 18px">${body}</td></tr></table></td></tr>`}
-function sellerTable(rows){const body=rows.map((s,i)=>`<tr><td style="padding:8px;border-bottom:1px solid #eaecf0;font-family:Arial;font-size:13px">${esc(s.label)}</td><td align="right" style="padding:8px;border-bottom:1px solid #eaecf0;font-family:Arial;font-size:13px">${s.clientChats}</td><td align="right" style="padding:8px;border-bottom:1px solid #eaecf0;font-family:Arial;font-size:13px;color:#b42318;font-weight:700">${s.noHumanResponse}</td><td align="right" style="padding:8px;border-bottom:1px solid #eaecf0;font-family:Arial;font-size:13px;color:#b54708;font-weight:700">${s.late}</td><td align="right" style="padding:8px;border-bottom:1px solid #eaecf0;font-family:Arial;font-size:13px">${s.avgResponseMinutes===null?'—':humanDuration(s.avgResponseMinutes)}</td></tr>`).join('');return `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse"><tr><th align="left" style="padding:8px;background:#f8fafc;font-family:Arial;font-size:12px">Vendedor</th><th align="right" style="padding:8px;background:#f8fafc;font-family:Arial;font-size:12px">Chats</th><th align="right" style="padding:8px;background:#f8fafc;font-family:Arial;font-size:12px">Sin respuesta</th><th align="right" style="padding:8px;background:#f8fafc;font-family:Arial;font-size:12px">Tarde</th><th align="right" style="padding:8px;background:#f8fafc;font-family:Arial;font-size:12px">Promedio</th></tr>${body}</table>`}
-function emailHtml(r){
-  const att=`<table role="presentation" width="100%"><tr>${metric('Clientes',r.attention.clientChats)}${metric('Respondidos',r.attention.humanResponded,'#027a48')}${metric('Sin respuesta',r.attention.noHumanResponse,'#b42318')}${metric('Solo bot',r.attention.botOnly,'#b54708')}</tr><tr>${metric('Respuestas tarde',r.attention.late,'#b54708')}${metric('Fuera de horario',r.attention.afterHours)}${metric('Promedio',r.attention.avgResponseMinutes===null?'—':humanDuration(r.attention.avgResponseMinutes))}<td></td></tr></table>`;
-  const port=`<table role="presentation" width="100%"><tr>${metric('Vigentes',r.portfolio.total)}${metric('Al día',r.portfolio.upToDate,'#027a48')}${metric('Vencidos',r.portfolio.overdue,'#b42318')}${metric('Sin fecha',r.portfolio.noDueDate,'#667085')}</tr></table>`;
-  const hunter=`<table role="presentation" width="100%"><tr>${metric('Gestiones del día',r.hunter.total,'#175cd3')}${metric('Vendedores con gestiones',r.hunter.sellers)}${metric('Nuevos HORNO',r.events.HORNO,'#b54708')}${metric('Nuevos GANADO',r.events.GANADO,'#027a48')}</tr></table>`;
-  const quality=`<div style="font-family:Arial;font-size:13px;line-height:20px;color:#475467"><b>${esc(r.aiQuality.status)}</b><br>${esc(r.aiQuality.note)}</div>`;
-  return `<!doctype html><html><body style="margin:0;background:#f2f4f7"><table role="presentation" width="100%"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="900" style="width:100%;max-width:900px"><tr><td style="padding:0 4px 20px"><div style="font-family:Arial;font-size:28px;font-weight:700;color:#101828">SUPERVISOR SCB — CIERRE GERENCIAL</div><div style="font-family:Arial;font-size:14px;color:#667085;margin-top:5px">${esc(r.date)} · ${esc(r.businessHours)}</div></td></tr>${section('📥 ATENCIÓN DEL DÍA',att)}${section('📊 CARTERA AL CIERRE',port)}${section('🎯 HUNTER + OPORTUNIDADES',hunter)}${section('👥 RENDIMIENTO POR VENDEDOR',sellerTable(r.bySeller))}${section('🧠 CALIDAD COMERCIAL',quality)}<tr><td style="font-family:Arial;font-size:11px;color:#98a2b3;padding:0 4px">SUPERVISOR SCB V3 · fuentes operativas READ ONLY · persistencia supervisor-scb.</td></tr></table></td></tr></table></body></html>`;
-}
+function html(report){const rows=(report.bySeller||[]).map(x=>`<tr><td style="padding:8px;border-bottom:1px solid #eee">${esc(cleanSellerLabel(x.seller))}</td><td align="right">${x.clientChats}</td><td align="right">${x.humanResponded}</td><td align="right" style="color:#b42318">${x.noHumanResponse}</td><td align="right" style="color:#b54708">${x.late}</td><td>${x.evaluation}</td></tr>`).join('');return `<!doctype html><html><body style="margin:0;background:#f2f4f7"><table width="100%"><tr><td align="center" style="padding:24px"><table width="900" style="max-width:900px;width:100%"><tr><td><h1 style="font-family:Arial">SUPERVISOR SCB — CIERRE GERENCIAL</h1><p style="font-family:Arial;color:#667085">${esc(report.date)} · ${esc(report.businessHours)}</p></td></tr><tr><td style="background:#fff;padding:20px;border-radius:12px;font-family:Arial"><h2>Resumen</h2><p>Clientes: <b>${report.rows.filter(x=>x.inboundCount>0).length}</b> · Respondidos: <b style="color:#027a48">${report.rows.filter(x=>x.humanResponded).length}</b> · Sin respuesta: <b style="color:#b42318">${report.rows.filter(x=>x.noHumanResponse).length}</b> · IA: <b>${report.aiUsedCount}</b></p><p>Cartera: ${report.portfolio.total} vigentes · ${report.portfolio.upToDate} al día · ${report.portfolio.overdue} vencidos</p></td></tr><tr><td style="height:16px"></td></tr><tr><td style="background:#fff;padding:20px;border-radius:12px;font-family:Arial"><h2>Vendedores</h2><table width="100%" style="border-collapse:collapse"><tr><th align="left">Vendedor</th><th>Chats</th><th>Humano</th><th>Sin respuesta</th><th>Tarde</th><th>Estado</th></tr>${rows}</table></td></tr></table></td></tr></table></body></html>`}
+
 class DailyGerencialService{
-  constructor({config,inbox,crm,hunter,store}){this.config=config;this.inbox=inbox;this.crm=crm;this.hunter=hunter;this.store=store}
-  async generate({date,now=new Date()}={}){
-    const target=date||ymdArgentina(now,this.config.timezone);const range=businessRange(target,this.config);const lateMinutes=30;
-    const [conversations,crmUsers,activeDeals,trackedDeals,hunterRows,events]=await Promise.all([
-      this.inbox.listConversationsInRange({from:range.fullFrom,to:range.fullTo,limit:Number(this.config.incremental.max_daily_conversation_states||5000)}),
-      this.crm.listUsers().catch(()=>[]),this.store.listActiveDeals(20000),this.store.listTrackedDeals(20000),this.store.listHunterDay(target,10000),this.store.listEventsRange(range.fullFrom.toISOString(),range.fullTo.toISOString(),2000)
-    ]);
-    const userMap=new Map();for(const u of crmUsers){for(const k of [u.email,u.id,u.name])if(k)userMap.set(norm(k),u.name||u.email||u.id)}
-    const rows=[];for(const c of conversations){const messages=await this.inbox.getMessages(c.id,this.config.incremental.max_messages_per_conversation);const row=analyzeDailyConversation(c,messages,range,lateMinutes);if(row.clientMessages>0)rows.push(row)}
-    const responseValues=rows.map(r=>r.avgResponseMinutes).filter(Number.isFinite);
-    const attention={clientChats:rows.length,humanResponded:rows.filter(r=>r.humanResponded).length,noHumanResponse:rows.filter(r=>r.noHumanResponse).length,botOnly:rows.filter(r=>r.botOnly).length,late:rows.reduce((a,r)=>a+(r.lateCount||0),0),afterHours:rows.filter(r=>r.respondedOutsideBusinessHours).length,businessCloseGrace:rows.filter(r=>r.businessCloseGrace).length,avgResponseMinutes:responseValues.length?Math.round(responseValues.reduce((a,b)=>a+b,0)/responseValues.length):null};
-    const portfolio=aggregatePortfolio(activeDeals),followUps=aggregateFollowUps(trackedDeals),bySeller=aggregateAttention(rows,userMap);
-    const hunterEvents=hunterRows.map(x=>x.row).filter(Boolean);const hunterSellers=new Set(hunterEvents.map(x=>norm(x.sellerId||x.userId||x.owner||x.seller||x.user||x.email)).filter(Boolean));
-    const ev={HORNO:0,GANADO:0,GANADO_FROM_AD:0};for(const e of events)if(Object.hasOwn(ev,e.type))ev[e.type]++;
-    const report={id:`daily__${target}`,reportType:'daily_gerencial',date:target,generatedAt:now.toISOString(),businessHours:range.label,lateMinutes,attention,portfolio,followUps,hunter:{total:hunterEvents.length,sellers:hunterSellers.size},events:ev,bySeller,aiQuality:{status:'PENDIENTE',note:'La evaluación consultiva con IA del legacy todavía no se activa en V3. Este cierre usa métricas operativas reales y no inventa calidad comercial.'},sourceReadOnly:true};
-    report.text=telegramText(report);report.html=emailHtml(report);await this.store.saveDailyReport(target,report);return report;
-  }
+  constructor({config,inbox,crm,hunter,store,openai}){this.config=config;this.inbox=inbox;this.crm=crm;this.hunter=hunter;this.store=store;this.openai=openai}
+  async start({date,startHour=9,endHour=17,lateMinutes=30,limit=500}={}){const range=localDayRange(date,startHour,endHour);const conversations=await this.inbox.listConversationsInRange({from:range.fullFrom,to:range.fullTo,limit});const jobId=`daily__${date}__${Date.now()}`;await this.store.saveDailyJob(jobId,{jobId,date,startHour,endHour,lateMinutes,limit,status:'queued',conversationIds:conversations.map(c=>c.id),total:conversations.length,processed:0,aiUsedCount:0,aiErrors:[],createdAt:new Date().toISOString()});return{jobId,total:conversations.length,status:'queued'}}
+  async process({jobId,batchSize=5}={}){const job=await this.store.getDailyJob(jobId);if(!job)throw new Error('DAILY_JOB_NOT_FOUND');if(job.status==='complete')return{job,report:await this.store.getDailyReport(job.date)};const ids=job.conversationIds||[],from=job.processed||0,to=Math.min(ids.length,from+Math.max(1,Number(batchSize||5))),range=localDayRange(job.date,job.startHour,job.endHour);let aiUsed=job.aiUsedCount||0;const aiErrors=[...(job.aiErrors||[])];for(const id of ids.slice(from,to)){const c=await this.inbox.getConversation(id);if(!c)continue;const messages=await this.inbox.getMessages(id,150);let row=analyzeConversation(c,messages,range,job.lateMinutes);if(!row.messagesInWindow)continue;const human=[...messages].reverse().find(m=>actor(m)==='human'&&m.user);if(human?.user)row.seller=row.owner=human.user;else if(!row.seller&&c.dealId){const d=await this.crm.getDeal(c.dealId).catch(()=>null);if(d?.owner)row.seller=row.owner=d.owner}const ex=exclusionReason(c,row,messages);if(ex){await this.store.saveDailyItem(jobId,id,{...row,excludedFromReport:true,exclusionReason:ex});continue}if(needsAi(row)&&this.openai?.isConfigured()){try{let ai=await this.store.getDailyReview(job.date,id);if(!ai){ai=await this.openai.analyzeConversation(c,messages);await this.store.saveDailyReview(job.date,id,ai)}row=applyAi(row,ai);aiUsed++}catch(e){aiErrors.push({conversationId:id,error:e.message})}}await this.store.saveDailyItem(jobId,id,row)}const processed=to,statusDone=processed>=ids.length;await this.store.saveDailyJob(jobId,{processed,aiUsedCount:aiUsed,aiErrors,status:statusDone?'finalizing':'processing',updatedAt:new Date().toISOString()});if(statusDone){const report=await this.finalize(jobId);return{job:await this.store.getDailyJob(jobId),report}}return{job:{...job,processed,aiUsedCount:aiUsed,status:'processing'},report:null}}
+  async finalize(jobId){const job=await this.store.getDailyJob(jobId),rowsAll=await this.store.listDailyItems(jobId,1000),rows=rowsAll.filter(r=>!r.excludedFromReport),bySeller=summary(rows),[activeDeals,trackedDeals,hunterRows,events]=await Promise.all([this.store.listActiveDeals(20000),this.store.listTrackedDeals(20000),this.store.listHunterDay(job.date,10000),this.store.listEventsRange(localDayRange(job.date).fullFrom.toISOString(),localDayRange(job.date).fullTo.toISOString(),2000)]);const hs=new Set(hunterRows.map(x=>norm(x.row?.sellerId||x.row?.userId||x.row?.owner||x.row?.seller||x.row?.user||x.row?.email)).filter(Boolean));const ev={HORNO:0,GANADO:0,GANADO_FROM_AD:0};for(const e of events)if(Object.hasOwn(ev,e.type))ev[e.type]++;const report={id:`daily__${job.date}`,reportType:'daily_gerencial_legacy_port',date:job.date,generatedAt:new Date().toISOString(),businessHours:localDayRange(job.date,job.startHour,job.endHour).label,lateMinutes:job.lateMinutes,rows,excludedCount:rowsAll.length-rows.length,bySeller,aiUsedCount:job.aiUsedCount||0,aiErrors:job.aiErrors||[],portfolio:aggregatePortfolio(activeDeals),followUps:aggregateFollowUps(trackedDeals),hunter:{total:hunterRows.length,sellers:hs.size},events:ev,sourceReadOnly:true,legacyLogicPorted:true,openaiModel:this.openai?.model||null};report.text=managerText(report);report.html=html(report);await this.store.saveDailyReport(job.date,report);await this.store.saveDailyJob(jobId,{status:'complete',completedAt:new Date().toISOString(),reportId:report.id});return report}
+  async generate({date}={}){const start=await this.start({date,limit:500});let result;do{result=await this.process({jobId:start.jobId,batchSize:5})}while(result.job.status!=='complete');return result.report}
 }
-module.exports={DailyGerencialService,analyzeDailyConversation,businessRange,telegramText,emailHtml,ymdArgentina};
+
+function businessRange(date,config={}){const start=Number(String(config.business_hours?.start||'09:00').slice(0,2)),end=Number(String(config.business_hours?.end||'17:00').slice(0,2));return localDayRange(date,start,end)}
+function telegramText(report){
+  if(Array.isArray(report?.rows))return managerText(report);
+  const a=report.attention||{},p=report.portfolio||{},h=report.hunter||{},e=report.events||{};
+  return `📊 SUPERVISOR SCB — CIERRE GERENCIAL ${report.date||''}\n\n📥 ATENCIÓN DEL DÍA\nConversaciones con clientes: ${a.clientChats||0}\nRespondidas por humano: ${a.humanResponded||0}\nSin respuesta humana: ${a.noHumanResponse||0}\nSolo bot: ${a.botOnly||0}\nRespuestas tarde (+30 min): ${a.late||0}\n\n📊 CARTERA AL CIERRE\nVigentes: ${p.total||0}\n🟢 Al día: ${p.upToDate||0}\n🔴 Vencidos: ${p.overdue||0}\n⚪ Sin fecha: ${p.noDueDate||0}\n\n🎯 HUNTER\nGestiones del día: ${h.total||0}\n\n🔥 OPORTUNIDADES\nNuevos HORNO: ${e.HORNO||0}\n🏆 Nuevos GANADO: ${e.GANADO||0}\n\n🧠 CALIDAD COMERCIAL\n${report.aiQuality?.status||'ACTIVA'}\n${report.aiQuality?.note||'Análisis consultivo con OpenAI.'}`;
+}
+function emailHtml(report){
+  if(Array.isArray(report?.rows))return html(report);
+  const rows=(report.bySeller||[]).map(x=>`<tr><td>${esc(x.label||x.seller||'')}</td><td>${x.clientChats||0}</td><td>${x.noHumanResponse||0}</td><td>${x.late||0}</td></tr>`).join('');
+  return `<!doctype html><html><body><table role="presentation" width="100%"><tr><td><h1>SUPERVISOR SCB — CIERRE GERENCIAL</h1><h2>RENDIMIENTO POR VENDEDOR</h2><table role="presentation"><tr><th>Vendedor</th><th>Chats</th><th>Sin respuesta</th><th>Tarde</th></tr>${rows}</table></td></tr></table></body></html>`;
+}
+
+module.exports={DailyGerencialService,analyzeConversation,analyzeDailyConversation:analyzeConversation,applyAi,needsAi,summary,managerText,html,localDayRange,businessRange,telegramText,emailHtml};
