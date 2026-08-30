@@ -15,3 +15,15 @@ Excluye NO RESPONDE y todos los estados cerrados/ganados/perdidos/descartados.
 - Migración única de los deal states ya persistidos en supervisor-scb. No vuelve a leer el CRM completo.
 
 No requiere variables nuevas. Fuentes siguen READ ONLY.
+
+
+## v0.7.7 — Communications & Report Testing UI
+
+Variables adicionales:
+- `EMAIL_SERVICE_URL`
+- `EMAIL_SYSTEM_TOKEN` (secret)
+- `EMAIL_ACCOUNT_KEY`
+- `SUPERVISOR_REPORT_EMAIL_TO`
+- `SUPERVISOR_BUCKET_NAME=bucket-supervisor-orchestador`
+
+La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Telegram, validar existencia del bucket sin escribir en él y separar Generar / Ver / Enviar reporte. El servicio de email se reutiliza vía `POST /api/system/send-email`; Supervisor no implementa SMTP.

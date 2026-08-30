@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - General supervisor report UX with full up-to-date portfolio by seller",
+  "description": "SUPERVISOR SCB V3 - Communications and report testing UI",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
@@ -16,6 +16,7 @@
   "dependencies": {
     "@google-cloud/firestore": "^7.11.0",
     "@google-cloud/functions-framework": "^3.4.6",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "@google-cloud/storage": "^7.16.0"
   }
 }
