@@ -56,3 +56,10 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Agrega total, distribución por calidad, `% Bueno + Excelente` y desglose por vendedor al texto y email del Daily.
 - Si la lectura CRM falla, el reporte muestra **dato no disponible**; nunca infiere ni inventa calidad con IA.
 - No agrega escrituras en CRM ni cambia reglas del pipeline.
+
+
+## v0.8.6 — Daily Gerencial Final
+- Consolida atención, tiempos, IA comercial, ranking, cartera, Hunter y eventos.
+- Cruza `leadQuality=EXCELENTE` (dato duro CRM) con la gestión diaria del Supervisor.
+- Agrega `Leads Excelentes mal aprovechados` y `Leads Excelentes bien trabajados`, ambos con link directo al HUB.
+- El cruce no modifica CRM/Bandeja/Hunter; todas las fuentes siguen en modo solo lectura.
