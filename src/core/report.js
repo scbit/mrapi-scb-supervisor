@@ -151,6 +151,77 @@ function formatReport(r){
   return L.join('\n').replace(/\n{3,}/g,'\n\n').trim().slice(0,4090);
 }
 
+
+
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function fmtNumber(value){
+  const n=Number(value||0);
+  try{return new Intl.NumberFormat('es-AR',{maximumFractionDigits:0}).format(n)}catch{return String(n)}
+}
+function emailSection(title,body){
+  return `<tr><td style="padding:0 0 18px 0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;background:#ffffff;border:1px solid #e4e7ec;border-radius:12px"><tr><td style="padding:18px 20px 10px 20px;font-family:Arial,Helvetica,sans-serif;font-size:18px;line-height:24px;font-weight:700;color:#101828">${title}</td></tr><tr><td style="padding:0 20px 18px 20px">${body}</td></tr></table></td></tr>`;
+}
+function metricCell(label,value,accent='#344054'){
+  return `<td valign="top" width="25%" style="padding:8px"><div style="font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;color:#667085">${escapeHtml(label)}</div><div style="margin-top:3px;font-family:Arial,Helvetica,sans-serif;font-size:22px;line-height:28px;font-weight:700;color:${accent}">${escapeHtml(value)}</div></td>`;
+}
+function sellerTable(rows,columns){
+  const head=columns.map(c=>`<th align="${c.align||'left'}" style="padding:9px 10px;border-bottom:1px solid #d0d5dd;background:#f8fafc;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:16px;color:#475467;font-weight:700">${escapeHtml(c.label)}</th>`).join('');
+  const body=rows.map((row,i)=>`<tr>${columns.map(c=>`<td align="${c.align||'left'}" style="padding:9px 10px;border-bottom:${i===rows.length-1?'0':'1px solid #eaecf0'};font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:18px;color:#101828">${c.render?c.render(row):escapeHtml(row[c.key]??'')}</td>`).join('')}</tr>`).join('');
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:collapse;border:1px solid #eaecf0;border-radius:8px">${head?`<thead><tr>${head}</tr></thead>`:''}<tbody>${body}</tbody></table>`;
+}
+function formatEmailReport(r){
+  const time=localTime(r.generatedAt,r.timezone);
+  let date='';
+  try{date=new Intl.DateTimeFormat('es-AR',{timeZone:r.timezone||'America/Argentina/Buenos_Aires',day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date(r.generatedAt))}catch{date=String(r.generatedAt||'').slice(0,10)}
+  const topPortfolio=topBy(r.sellers,'activeDeals');
+  const topOverdue=topBy(r.sellers,'overdueDeals');
+  const allUpToDate=r.sellers.slice().sort((a,b)=>(b.upToDateDeals||0)-(a.upToDateDeals||0)||String(a.label).localeCompare(String(b.label)));
+  const attention=attentionSellers(r.sellers);
+
+  const attentionMetrics=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${metricCell('Clientes esperando',fmtNumber(r.inbox.waiting),'#b42318')}${metricCell('Sin asignar',fmtNumber(r.inbox.pendingAssignment),'#b54708')}${metricCell('60+ min',fmtNumber(r.inbox.waitingBuckets.PLUS_60),'#b42318')}${metricCell('Mayor espera',humanDuration(r.inbox.maxWaitingMinutes),'#b42318')}</tr></table><div style="padding:8px 8px 0 8px;font-family:Arial,Helvetica,sans-serif;font-size:13px;line-height:20px;color:#475467">15–29 min: <b>${fmtNumber(r.inbox.waitingBuckets.PLUS_15)}</b> &nbsp;&nbsp; 30–59 min: <b>${fmtNumber(r.inbox.waitingBuckets.PLUS_30)}</b></div>`;
+
+  const portfolioMetrics=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${metricCell('Total',fmtNumber(r.portfolio.total),'#101828')}${metricCell('🟢 Al día',fmtNumber(r.portfolio.upToDate),'#027a48')}${metricCell('🔴 Vencidos',fmtNumber(r.portfolio.overdue),'#b42318')}${metricCell('⚪ Sin fecha',fmtNumber(r.portfolio.noDueDate),'#667085')}</tr></table>`;
+
+  const topTable=sellerTable(topPortfolio.map((s,i)=>({rank:i+1,name:cleanSellerLabel(s.label),value:s.activeDeals})),[
+    {label:'#',key:'rank',align:'center'},{label:'Vendedor / cuenta',key:'name'},{label:'Vigentes',key:'value',align:'right',render:x=>`<b>${fmtNumber(x.value)}</b>`}
+  ]);
+  const overdueTable=sellerTable(topOverdue.map((s,i)=>({rank:i+1,name:cleanSellerLabel(s.label),value:s.overdueDeals})),[
+    {label:'#',key:'rank',align:'center'},{label:'Vendedor / cuenta',key:'name'},{label:'Vencidos',key:'value',align:'right',render:x=>`<b style="color:#b42318">${fmtNumber(x.value)}</b>`}
+  ]);
+  const upToDateTable=sellerTable(allUpToDate.map(s=>({name:cleanSellerLabel(s.label),up:s.upToDateDeals||0,total:s.activeDeals||0})),[
+    {label:'Vendedor / cuenta',key:'name'},
+    {label:'Al día',key:'up',align:'right',render:x=>`<b style="color:#027a48">${fmtNumber(x.up)}</b>`},
+    {label:'Vigentes',key:'total',align:'right',render:x=>fmtNumber(x.total)}
+  ]);
+  const attentionTable=attention.length?sellerTable(attention.map(s=>({name:cleanSellerLabel(s.label),vig:s.activeDeals||0,up:s.upToDateDeals||0,over:s.overdueDeals||0,waiting:s.waiting||0,hunter:s.hunterToday||0,status:s.activity})),[
+    {label:'Vendedor / cuenta',key:'name'},
+    {label:'Vigentes',key:'vig',align:'right'},
+    {label:'Al día',key:'up',align:'right',render:x=>`<span style="color:#027a48;font-weight:700">${fmtNumber(x.up)}</span>`},
+    {label:'Vencidos',key:'over',align:'right',render:x=>`<span style="color:#b42318;font-weight:700">${fmtNumber(x.over)}</span>`},
+    {label:'Esperando',key:'waiting',align:'right'},
+    {label:'Hunter hoy',key:'hunter',align:'right'},
+    {label:'Estado',key:'status',render:x=>x.status==='ACTIVO'?'<b style="color:#027a48">● ACTIVO</b>':'<b style="color:#b42318">● INACTIVO</b>'}
+  ]):'<div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#667085">Sin vendedores para destacar.</div>';
+
+  const followMetrics=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${metricCell('Vencidos',fmtNumber(r.followUps.total),'#b42318')}${metricCell('<15 días',fmtNumber(r.followUps.DUE),'#344054')}${metricCell('15–29 días',fmtNumber(r.followUps.PLUS_15),'#b54708')}${metricCell('30–59 días',fmtNumber(r.followUps.PLUS_30),'#b42318')}</tr><tr>${metricCell('60+ días',fmtNumber(r.followUps.PLUS_60),'#7a271a')}<td colspan="3"></td></tr></table>`;
+  const eventMetrics=`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${metricCell('🔥 Nuevos HORNO',fmtNumber(r.events.HORNO),'#b54708')}${metricCell('🏆 Nuevos GANADO',fmtNumber(r.events.GANADO),'#027a48')}${metricCell('📣 Desde publicidad',fmtNumber(r.events.GANADO_FROM_AD),'#175cd3')}<td width="25%"></td></tr></table>`;
+
+  const sections=[
+    emailSection('🚨 ATENCIÓN AHORA',attentionMetrics),
+    emailSection('📊 CARTERA VIGENTE',portfolioMetrics),
+    emailSection('🏅 TOP CARTERA',topTable),
+    emailSection('🔴 MAYOR CARTERA VENCIDA',overdueTable),
+    emailSection('🟢 CARTERA AL DÍA — TODOS',upToDateTable),
+    emailSection('👥 REQUIEREN ATENCIÓN',attentionTable),
+    emailSection('📅 SEGUIMIENTOS CRM',followMetrics),
+    emailSection('🔥 OPORTUNIDADES Y GANADOS',eventMetrics)
+  ].join('');
+
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#f2f4f7"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f2f4f7"><tr><td align="center" style="padding:24px 12px"><table role="presentation" width="900" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:900px"><tr><td style="padding:0 4px 20px 4px"><div style="font-family:Arial,Helvetica,sans-serif;font-size:28px;line-height:34px;font-weight:700;color:#101828">SUPERVISOR SCB</div><div style="margin-top:5px;font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:20px;color:#667085">Reporte general · ${escapeHtml(date)} · ${escapeHtml(time)}</div></td></tr>${sections}<tr><td style="padding:2px 4px 20px 4px;font-family:Arial,Helvetica,sans-serif;font-size:11px;line-height:16px;color:#98a2b3">Generado automáticamente por SUPERVISOR SCB V3. Fuentes operativas en modo solo lectura.</td></tr></table></td></tr></table></body></html>`;
+}
+
 function buildReport({runId,now,inbox,hunterBySeller,followUpRows,activeDealRows,waitingRows,conversationRows,events,sellerLabels,sellerRoster=[],timezone='America/Argentina/Buenos_Aires'}){
   const followUps=aggregateFollowUps(followUpRows),portfolio=aggregatePortfolio(activeDealRows),wait=waitingBuckets(waitingRows);
   const sellerMap=new Map();
@@ -194,7 +265,8 @@ function buildReport({runId,now,inbox,hunterBySeller,followUpRows,activeDealRows
   for(const e of events||[])if(ev[e.type]!==undefined)ev[e.type]++;
   const r={runId,generatedAt:now.toISOString(),timezone,inbox:{...inbox,waitingBuckets:wait},portfolio,followUps,sellers,events:ev};
   r.text=formatReport(r);
+  r.html=formatEmailReport(r);
   return r;
 }
 
-module.exports={buildReport,formatReport,aggregateFollowUps,aggregatePortfolio,waitingBuckets,humanDuration,cleanSellerLabel,attentionSellers};
+module.exports={buildReport,formatReport,formatEmailReport,aggregateFollowUps,aggregatePortfolio,waitingBuckets,humanDuration,cleanSellerLabel,attentionSellers};

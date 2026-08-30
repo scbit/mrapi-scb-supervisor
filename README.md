@@ -27,3 +27,12 @@ Variables adicionales:
 - `SUPERVISOR_BUCKET_NAME=bucket-supervisor-orchestador`
 
 La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Telegram, validar existencia del bucket sin escribir en él y separar Generar / Ver / Enviar reporte. El servicio de email se reutiliza vía `POST /api/system/send-email`; Supervisor no implementa SMTP.
+
+
+## v0.7.8 — Email Report UX
+
+- Mantiene `report.text` para Telegram.
+- Genera `report.html` específico para email.
+- HTML compatible con Outlook usando tablas y estilos inline.
+- Secciones visuales separadas, métricas destacadas y tablas para cartera/atención.
+- No cambia cálculos ni reglas de negocio del reporte general.
