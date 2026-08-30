@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.8.2",
+  "version": "0.8.3",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Daily Gerencial route contract hotfix",
+  "description": "SUPERVISOR SCB V3 - Human actor parity with legacy daily supervisor",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
