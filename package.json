@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.8.3",
+  "version": "0.8.4",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Human actor parity with legacy daily supervisor",
+  "description": "SUPERVISOR SCB V3 - Daily report accuracy and actionable email UX",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

@@ -36,3 +36,13 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - HTML compatible con Outlook usando tablas y estilos inline.
 - Secciones visuales separadas, métricas destacadas y tablas para cartera/atención.
 - No cambia cálculos ni reglas de negocio del reporte general.
+
+
+## v0.8.4 — Daily Report Accuracy + Actionable Email
+
+- Corrige el porcentaje por vendedor para usar conversaciones de cliente respondidas, nunca cantidad de mensajes humanos sobre cantidad de clientes.
+- Separa conversaciones respondidas, actividad humana y cantidad de mensajes humanos.
+- Rediseña el email diario con tarjetas, ranking, calidad IA, cartera/Hunter/eventos y casos priorizados.
+- Cada caso relevante incluye botón **Ver conversación** con `https://hub.sentirecustomsbroker.com/?conversationId=<conversationId>`.
+- `HUB_BASE_URL` puede configurarse por entorno; usa el HUB productivo como valor por defecto.
+- Fuentes operativas permanecen READ ONLY.
