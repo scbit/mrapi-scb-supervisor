@@ -87,5 +87,38 @@ Devolvé SOLO JSON válido con esta estructura:
     const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);const data=JSON.parse(raw);const outputText=data.output_text||data.output?.flatMap(o=>o.content||[]).find(c=>c.type==='output_text')?.text||'';if(!outputText)throw new Error('OpenAI no devolvió texto.');const out=JSON.parse(outputText.replace(/^```json/i,'').replace(/^```/i,'').replace(/```$/i,'').trim());return{verified:out.verified===true,score:Number(out.score||0),reason:String(out.reason||''),criteria:Array.isArray(out.criteria)?out.criteria:[],evidenceMessageId:message?.id||null,evidenceAt:message?.timestamp||null};
   }
 
+  async analyzeWeekendOpportunity({conversation,messages=[]}){
+    if(!this.apiKey)throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
+    const transcript=this.buildTranscript(messages).slice(0,12000);
+    const prompt=`Sos guardia comercial de fin de semana de SCB. Analizá SOLO si este chat nuevo merece interrumpir al dueño durante el fin de semana.
+Muchos chats llegan desde Meta Ads y pueden estar sin vendedor asignado: eso NO es una urgencia por sí mismo.
+No uses la calidad oficial del CRM. Esta es una señal provisoria de oportunidad.
+
+Alertar únicamente si hay:
+- urgencia real;
+- intención clara de avanzar/pagar/cerrar;
+- volumen comercial fuerte;
+- contenedores, compra recurrente o proveedor listo;
+- problema operativo sensible;
+- cliente muy molesto con riesgo real;
+- oportunidad excepcional que no debería esperar al lunes.
+
+No alertes consultas genéricas, curiosidad, primer "hola", pedido básico de precio o lead normal de Ads.
+
+Conversación:
+Cliente: ${conversation?.contactName||'sin nombre'}
+Asignado: ${conversation?.owner||'NO'}
+Origen: ${conversation?.sourceChannel||''}
+Anuncio: ${conversation?.adTitle||''}
+
+Mensajes recientes:
+${transcript}
+
+Devolvé SOLO JSON:
+{"signal":"NORMAL|INTERESANTE|MUY_INTERESANTE|URGENTE|CRITICA","urgent":false,"summary":"","reason":""}`;
+    const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido.'},{role:'user',content:prompt}]})});
+    const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);const data=JSON.parse(raw);const outputText=data.output_text||data.output?.flatMap(o=>o.content||[]).find(c=>c.type==='output_text')?.text||'';if(!outputText)throw new Error('OpenAI no devolvió texto.');const out=JSON.parse(outputText.replace(/^```json/i,'').replace(/^```/i,'').replace(/```$/i,'').trim());return{signal:String(out.signal||'NORMAL').toUpperCase(),urgent:out.urgent===true,summary:String(out.summary||''),reason:String(out.reason||'')};
+  }
+
 }
 module.exports={OpenAIAdapter};

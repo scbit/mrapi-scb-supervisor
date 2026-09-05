@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SUPERVISOR SCB V3</title>
 <style>
-:root{font-family:Inter,Arial,sans-serif;color:#111827;background:#f4f7fb}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1220px;margin:0 auto;padding:28px 18px 50px}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}.title h1{margin:0;font-size:34px}.title p{margin:7px 0 0;color:#667085}.badge{background:#e9f8ef;color:#18794e;border:1px solid #b7e4c7;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:#fff;border:1px solid #e4e7ec;border-radius:15px;padding:18px;box-shadow:0 3px 12px rgba(16,24,40,.04)}.span12{grid-column:span 12}.span6{grid-column:span 6}.span5{grid-column:span 5}.span7{grid-column:span 7}h2{font-size:17px;margin:0 0 14px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.buttonGroup{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.divider{height:1px;background:#eaecf0;margin:16px 0}input,select{flex:1;min-width:220px;padding:11px 12px;border:1px solid #cfd4dc;border-radius:9px;font-size:14px;background:#fff}select[multiple]{min-height:180px}.fieldCard{background:#f8fafc;border:1px solid #eaecf0;border-radius:12px;padding:12px}.fieldTitle{font-size:13px;font-weight:700;color:#344054;margin:0 0 8px}.inlineActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.hidden{display:none !important}button{border:0;border-radius:9px;padding:11px 15px;font-weight:700;cursor:pointer;background:#eef2f6;color:#1d2939}button.primary{background:#155eef;color:#fff}button.good{background:#039855;color:#fff}button.warn{background:#f79009;color:#fff}button.danger{background:#d92d20;color:#fff}button.purple{background:#6938ef;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}.hint{color:#667085;font-size:13px;margin-top:9px}.kv{display:grid;grid-template-columns:180px 1fr;gap:9px 10px;font-size:14px}.kv b{color:#344054}.ok{color:#067647;font-weight:700}.bad{color:#b42318;font-weight:700}.muted{color:#667085}.chip{display:inline-block;padding:4px 8px;border-radius:999px;background:#f2f4f7;font-size:12px;font-weight:700}.chip.okc{background:#ecfdf3;color:#027a48}.chip.badc{background:#fef3f2;color:#b42318}pre{white-space:pre-wrap;word-break:break-word;background:#101828;color:#e4e7ec;padding:16px;border-radius:10px;min-height:130px;max-height:420px;overflow:auto;margin:0;font:13px/1.45 Consolas,monospace}.reportText{white-space:pre-wrap;background:#f8fafc;border:1px solid #e4e7ec;padding:16px;border-radius:10px;min-height:300px;max-height:620px;overflow:auto;font:14px/1.45 Consolas,monospace}.source-note{font-size:13px;color:#475467;margin-top:12px}.source-note code{background:#f2f4f7;padding:2px 5px;border-radius:5px}.spinner{display:none;margin-left:8px}.busy .spinner{display:inline}.sectionHelp{color:#667085;font-size:13px;margin:-6px 0 10px}.dangerNote{background:#fffaeb;border:1px solid #fedf89;border-radius:9px;padding:10px 12px;color:#93370d;font-size:13px;margin-top:12px}@media(max-width:900px){.span5,.span6,.span7{grid-column:span 12}.kv{grid-template-columns:1fr}.title h1{font-size:28px}header{display:block}.badge{display:inline-block;margin-top:12px}}
+:root{font-family:Inter,Arial,sans-serif;color:#111827;background:#f4f7fb}*{box-sizing:border-box}body{margin:0}.wrap{max-width:1220px;margin:0 auto;padding:28px 18px 50px}header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}.title h1{margin:0;font-size:34px}.title p{margin:7px 0 0;color:#667085}.badge{background:#e9f8ef;color:#18794e;border:1px solid #b7e4c7;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700}.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:16px}.card{background:#fff;border:1px solid #e4e7ec;border-radius:15px;padding:18px;box-shadow:0 3px 12px rgba(16,24,40,.04)}.span12{grid-column:span 12}.span6{grid-column:span 6}.span5{grid-column:span 5}.span7{grid-column:span 7}h2{font-size:17px;margin:0 0 14px}.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.buttonGroup{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}.divider{height:1px;background:#eaecf0;margin:16px 0}input,select{flex:1;min-width:220px;padding:11px 12px;border:1px solid #cfd4dc;border-radius:9px;font-size:14px;background:#fff}select[multiple]{min-height:180px}.fieldCard{background:#f8fafc;border:1px solid #eaecf0;border-radius:12px;padding:12px}.fieldTitle{font-size:13px;font-weight:700;color:#344054;margin:0 0 8px}.dayRow{display:flex;gap:8px;flex-wrap:wrap}.dayToggle{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d0d5dd;border-radius:9px;padding:8px 10px;font-size:13px}.dayToggle input{min-width:auto;flex:none}.remoteSummary{background:#eef4ff;border:1px solid #c7d7fe;border-radius:12px;padding:12px;color:#344054;font-size:13px}.inlineActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}.hidden{display:none !important}button{border:0;border-radius:9px;padding:11px 15px;font-weight:700;cursor:pointer;background:#eef2f6;color:#1d2939}button.primary{background:#155eef;color:#fff}button.good{background:#039855;color:#fff}button.warn{background:#f79009;color:#fff}button.danger{background:#d92d20;color:#fff}button.purple{background:#6938ef;color:#fff}button:disabled{opacity:.55;cursor:not-allowed}.hint{color:#667085;font-size:13px;margin-top:9px}.kv{display:grid;grid-template-columns:180px 1fr;gap:9px 10px;font-size:14px}.kv b{color:#344054}.ok{color:#067647;font-weight:700}.bad{color:#b42318;font-weight:700}.muted{color:#667085}.chip{display:inline-block;padding:4px 8px;border-radius:999px;background:#f2f4f7;font-size:12px;font-weight:700}.chip.okc{background:#ecfdf3;color:#027a48}.chip.badc{background:#fef3f2;color:#b42318}pre{white-space:pre-wrap;word-break:break-word;background:#101828;color:#e4e7ec;padding:16px;border-radius:10px;min-height:130px;max-height:420px;overflow:auto;margin:0;font:13px/1.45 Consolas,monospace}.reportText{white-space:pre-wrap;background:#f8fafc;border:1px solid #e4e7ec;padding:16px;border-radius:10px;min-height:300px;max-height:620px;overflow:auto;font:14px/1.45 Consolas,monospace}.source-note{font-size:13px;color:#475467;margin-top:12px}.source-note code{background:#f2f4f7;padding:2px 5px;border-radius:5px}.spinner{display:none;margin-left:8px}.busy .spinner{display:inline}.sectionHelp{color:#667085;font-size:13px;margin:-6px 0 10px}.dangerNote{background:#fffaeb;border:1px solid #fedf89;border-radius:9px;padding:10px 12px;color:#93370d;font-size:13px;margin-top:12px}@media(max-width:900px){.span5,.span6,.span7{grid-column:span 12}.kv{grid-template-columns:1fr}.title h1{font-size:28px}header{display:block}.badge{display:inline-block;margin-top:12px}}
 </style>
 </head>
 <body><div class="wrap">
-<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.9.1</p></div><div class="badge">FUENTES READ ONLY</div></header>
+<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.9.2</p></div><div class="badge">FUENTES READ ONLY</div></header>
 <div class="grid">
 <section class="card span12"><h2>Acceso</h2><div class="row"><input id="token" type="password" placeholder="Pegá SUPERVISOR_API_TOKEN acá"><button onclick="saveToken()">Guardar token</button><button onclick="clearToken()">Borrar</button></div><div class="hint">El token queda solamente en este navegador y se usa como header del Supervisor.</div></section>
 
@@ -21,60 +21,116 @@
 <section class="card span12"><h2>4. Reporte Diario Gerencial V3</h2><div class="sectionHelp">Port del botón legacy “Ejecutar supervisor diario”. Procesa en tandas de 5, usa OpenAI cuando corresponde y no envía nada automáticamente.</div><div class="row"><input id="dailyDate" type="date" style="max-width:220px;min-width:180px"><span class="hint" style="margin:0">Misma lógica gerencial del servicio legacy, adaptada dentro de V3. OPENAI_API_KEY y OPENAI_MODEL se usan directamente acá.</span></div><div class="buttonGroup"><!-- Generar Diario Gerencial (legacy label kept for compatibility) /api/supervisor/daily/generate --><button class="primary" onclick="executeDailySupervisor()">Ejecutar supervisor diario</button><button onclick="loadDaily()">Ver Diario</button><button class="good" onclick="sendDailyTelegram()">Enviar Diario a Telegram</button><button class="purple" onclick="sendDailyEmail()">Enviar Diario por Email</button><button class="warn" onclick="sendDailyAll()">Enviar Diario Telegram + Email</button></div></section>
 
 
-<section class="card span12" id="remoteSupervisorCard"><h2>5. Supervisor Remoto — configuración y correcciones</h2><div class="sectionHelp">Configura desde UI a quién supervisar, horario, pausa y frecuencia. Las fuentes CRM/Bandeja/Hunter siguen READ ONLY; el estado de supervisión se guarda solo en supervisor-scb.</div><input id="rsId" type="hidden">
+<section class="card span12" id="remoteSupervisorCard">
+<h2>5. Supervisor Remoto</h2>
+<div class="sectionHelp">Configuración simple. El sistema supervisa vendedores durante la semana y hace guardia ejecutiva los fines de semana.</div>
+<input id="rsId" type="hidden">
+
 <div class="grid" style="margin-top:12px">
   <div class="span6 fieldCard">
-    <div class="fieldTitle">Configuración guardada</div>
-    <select id="rsConfigSelect">
-      <option value="">+ Nuevo supervisor remoto</option>
-    </select>
-    <div class="inlineActions">
-      <button onclick="loadRemoteSupervisors()">Recargar supervisores</button>
-      <button onclick="resetRemoteForm()">Nuevo / limpiar</button>
-    </div>
-    <div class="hint">Elegí uno ya creado para cargarlo, o dejá “Nuevo” para crear uno nuevo.</div>
+    <div class="fieldTitle">Supervisor</div>
+    <select id="rsConfigSelect"><option value="">+ Nuevo supervisor</option></select>
+    <div class="inlineActions"><button onclick="loadRemoteSupervisors()">Recargar</button><button onclick="resetRemoteForm()">Nuevo</button></div>
   </div>
+
   <div class="span6 fieldCard">
-    <div class="fieldTitle">Nombre del supervisor</div>
-    <select id="rsNamePreset" onchange="toggleRemoteNameCustom()">
-      <option value="Supervisor remoto" selected>Supervisor remoto</option>
-      <option value="Supervisor comercial">Supervisor comercial</option>
-      <option value="Supervisor recuperación">Supervisor recuperación</option>
-      <option value="Supervisor vendedores">Supervisor vendedores</option>
-      <option value="__custom__">Otro nombre…</option>
-    </select>
-    <input id="rsNameCustom" class="hidden" placeholder="Escribí el nombre del supervisor">
+    <div class="fieldTitle">Nombre</div>
+    <input id="rsNameCustom" placeholder="Ej: Supervisor Comercial Remoto" value="Supervisor Comercial Remoto">
   </div>
-  <div class="span6 fieldCard">
-    <div class="fieldTitle">Destino de Telegram</div>
-    <select id="rsTelegramMode" onchange="toggleRemoteTelegramCustom()">
-      <option value="general" selected>Usar chat general configurado</option>
-      <option value="custom">Usar chat específico</option>
-    </select>
-    <input id="rsTelegram" class="hidden" placeholder="Telegram chat ID específico">
-  </div>
-  <div class="span6 fieldCard">
+
+  <div class="span12 fieldCard">
     <div class="fieldTitle">Vendedores a supervisar</div>
-    <select id="rsSellerSelect" multiple></select>
-    <div class="inlineActions">
-      <button onclick="selectAllSellers()">Seleccionar todos</button>
-      <button onclick="clearSellerSelection()">Limpiar selección</button>
+    <select id="rsSellerSelect" multiple style="width:100%;min-height:150px"></select>
+    <div class="inlineActions"><button onclick="selectAllSellers()">Seleccionar todos</button><button onclick="clearSellerSelection()">Limpiar</button></div>
+    <div class="hint">Elegí uno o varios vendedores reales. Si queda vacío, toma todos.</div>
+  </div>
+
+  <div class="span12 fieldCard">
+    <div class="fieldTitle">Días de supervisión normal</div>
+    <div class="dayRow">
+      <label class="dayToggle"><input class="weekdayCb" type="checkbox" value="Mon" checked> Lun</label>
+      <label class="dayToggle"><input class="weekdayCb" type="checkbox" value="Tue" checked> Mar</label>
+      <label class="dayToggle"><input class="weekdayCb" type="checkbox" value="Wed" checked> Mié</label>
+      <label class="dayToggle"><input class="weekdayCb" type="checkbox" value="Thu" checked> Jue</label>
+      <label class="dayToggle"><input class="weekdayCb" type="checkbox" value="Fri" checked> Vie</label>
     </div>
-    <div class="hint">Podés elegir uno, varios o todos. Si lo dejás vacío, el supervisor toma todos los vendedores.</div>
   </div>
+
   <div class="span6 fieldCard">
-    <div class="fieldTitle">Horario y frecuencia</div>
-    <div class="row"><input id="rsStart" type="time" value="09:00" style="min-width:120px"><input id="rsEnd" type="time" value="17:00" style="min-width:120px"><input id="rsFreq" type="number" min="5" max="240" value="30" placeholder="Frecuencia min" style="min-width:120px"></div>
-    <div class="hint">Ejemplo: cada 30 min, de 09:00 a 17:00.</div>
+    <div class="fieldTitle">Horario semana</div>
+    <div class="row"><input id="rsStart" type="time" value="09:00"><input id="rsEnd" type="time" value="17:00"></div>
+    <div class="hint">Horario de control del supervisor remoto.</div>
   </div>
+
   <div class="span6 fieldCard">
-    <div class="fieldTitle">Pausa y estado</div>
-    <div class="row"><input id="rsPauseStart" type="time" value="12:00" style="min-width:120px"><input id="rsPauseEnd" type="time" value="13:00" style="min-width:120px"><label style="font-size:14px"><input id="rsEnabled" type="checkbox" checked style="min-width:auto"> Activo</label></div>
-    <div class="hint">Ejemplo: pausa de 12:00 a 13:00.</div>
+    <div class="fieldTitle">Pausa</div>
+    <div class="row"><input id="rsPauseStart" type="time" value="12:00"><input id="rsPauseEnd" type="time" value="13:00"></div>
+    <div class="hint">Durante la pausa no envía reportes.</div>
+  </div>
+
+  <div class="span6 fieldCard">
+    <div class="fieldTitle">Cada cuánto informar al supervisor</div>
+    <select id="rsFreq">
+      <option value="15">Cada 15 minutos</option>
+      <option value="30" selected>Cada 30 minutos</option>
+      <option value="45">Cada 45 minutos</option>
+      <option value="60">Cada 1 hora</option>
+      <option value="120">Cada 2 horas</option>
+    </select>
+  </div>
+
+  <div class="span6 fieldCard">
+    <div class="fieldTitle">Destino semana</div>
+    <select id="rsTelegramMode" onchange="toggleRemoteTelegramCustom()">
+      <option value="general">Telegram general</option>
+      <option value="custom" selected>Telegram del supervisor remoto</option>
+    </select>
+    <input id="rsTelegram" placeholder="Chat ID del supervisor remoto" style="margin-top:8px">
+  </div>
+
+  <div class="span12 fieldCard">
+    <div class="fieldTitle">🌙 Guardia fin de semana</div>
+    <div class="dayRow">
+      <label class="dayToggle"><input id="rsWeekendEnabled" type="checkbox" checked> Activar guardia</label>
+      <label class="dayToggle"><input class="weekendCb" type="checkbox" value="Sat" checked> Sábado</label>
+      <label class="dayToggle"><input class="weekendCb" type="checkbox" value="Sun" checked> Domingo</label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <select id="rsWeekendFreq">
+        <option value="60">Revisar cada 1 hora</option>
+        <option value="120" selected>Revisar cada 2 horas</option>
+        <option value="180">Revisar cada 3 horas</option>
+        <option value="240">Revisar cada 4 horas</option>
+      </select>
+      <select id="rsWeekendSignal">
+        <option value="INTERESANTE">Avisar desde Interesante</option>
+        <option value="MUY_INTERESANTE" selected>Avisar desde Muy interesante</option>
+        <option value="URGENTE">Solo urgente</option>
+        <option value="CRITICA">Solo crítico</option>
+      </select>
+    </div>
+    <div class="remoteSummary" style="margin-top:10px">
+      <b>Destino fin de semana: solo tu Telegram personal.</b><br>
+      Los chats nuevos de Ads sin vendedor asignado se observan, pero NO generan alerta solo por estar sin asignar.
+      Solo avisa si detecta una urgencia o una oportunidad especialmente fuerte.
+    </div>
+  </div>
+
+  <div class="span12 fieldCard">
+    <label style="font-size:14px"><input id="rsEnabled" type="checkbox" checked style="min-width:auto"> Supervisor activo</label>
   </div>
 </div>
-<div class="buttonGroup"><button class="primary" onclick="saveRemoteSupervisor()">Guardar configuración</button><button class="good" onclick="runRemoteSupervisor(false)">Generar reporte ahora</button><button class="warn" onclick="runRemoteSupervisor(true)">Enviar ahora a Telegram</button><button onclick="verifyRemoteActions()">Verificar correcciones</button><button onclick="runRemoteTick()">Ejecutar tick programado</button></div>
-<div class="divider"></div><h2 style="font-size:15px">Crear corrección puntual</h2><div class="row"><input id="raSeller" placeholder="Vendedor"><input id="raConversation" placeholder="conversationId"><select id="raType" style="padding:11px 12px;border:1px solid #cfd4dc;border-radius:9px"><option>RESPOND</option><option>FOLLOW_UP</option><option>DISCOVERY</option><option>ADVISE</option><option>EXPLAIN_OPTIONS</option><option>DO_NOT_DISMISS</option><option>IMPROVE_RESPONSE</option><option>TRY_TO_CLOSE</option></select></div><div class="row" style="margin-top:10px"><input id="raReason" placeholder="Motivo: qué está haciendo mal"><input id="raExpected" placeholder="Qué esperamos que haga en la próxima acción"></div><div class="buttonGroup"><button class="purple" onclick="createRemoteAction()">Crear corrección</button><button onclick="loadSellerCompliance()">Ver cumplimiento vendedor</button></div>
+
+<div class="buttonGroup">
+  <button class="primary" onclick="saveRemoteSupervisor()">Guardar configuración</button>
+  <button class="good" onclick="runRemoteSupervisor(false)">Generar reporte de prueba</button>
+  <button class="warn" onclick="runRemoteSupervisor(true)">Enviar prueba al supervisor</button>
+</div>
+
+<div class="divider"></div>
+<h2 style="font-size:15px">Correcciones automáticas</h2>
+<div class="sectionHelp">Las correcciones se crean y verifican por el sistema. Ya no necesitás escribir conversationId ni crear acciones manualmente.</div>
+<div class="buttonGroup"><button onclick="verifyRemoteActions()">Verificar correcciones pendientes</button></div>
 </section>
 <section class="card span5"><h2>Estado rápido</h2><div class="kv"><b>Versión</b><span id="sVersion" class="muted">—</span><b>Supervisor DB</b><span id="sDb" class="muted">—</span><b>Fuentes read-only</b><span id="sReadonly" class="muted">—</span><b>CRM snapshot</b><span id="sSnapshot" class="muted">—</span><b>Última corrida</b><span id="sRun" class="muted">—</span><b>OpenAI</b><span id="sOpenAI" class="muted">—</span></div></section>
 <section class="card span7"><h2>Último reporte</h2><div id="reportText" class="reportText">Todavía no cargaste un reporte.</div></section>
@@ -104,24 +160,19 @@ async function sendDailyAll(){if(!confirm('¿Enviar este Diario Gerencial por Te
 
 function getSelectedValues(selectEl){return Array.from(selectEl?.selectedOptions||[]).map(o=>o.value).filter(Boolean)}
 function setSelectedValues(selectEl,values=[]){const wanted=new Set((values||[]).map(String));Array.from(selectEl?.options||[]).forEach(o=>o.selected=wanted.has(String(o.value)))}
-function resetRemoteForm(){rsConfigSelect.value='';rsId.value='';rsNamePreset.value='Supervisor remoto';rsNameCustom.value='';toggleRemoteNameCustom();rsTelegramMode.value='general';rsTelegram.value='';toggleRemoteTelegramCustom();clearSellerSelection();rsStart.value='09:00';rsEnd.value='17:00';rsFreq.value=30;rsPauseStart.value='12:00';rsPauseEnd.value='13:00';rsEnabled.checked=true}
-function toggleRemoteNameCustom(){const custom=rsNamePreset.value==='__custom__';rsNameCustom.classList.toggle('hidden',!custom);if(!custom)rsNameCustom.value=''}
-function toggleRemoteTelegramCustom(){const custom=rsTelegramMode.value==='custom';rsTelegram.classList.toggle('hidden',!custom);if(!custom)rsTelegram.value=''}
+function checkedValues(selector){return Array.from(document.querySelectorAll(selector)).filter(x=>x.checked).map(x=>x.value)}
+function setCheckedValues(selector,values=[]){const wanted=new Set(values||[]);document.querySelectorAll(selector).forEach(x=>x.checked=wanted.has(x.value))}
 function selectAllSellers(){Array.from(rsSellerSelect.options).forEach(o=>o.selected=!!o.value)}
 function clearSellerSelection(){Array.from(rsSellerSelect.options).forEach(o=>o.selected=false)}
-function remoteNameValue(){return rsNamePreset.value==='__custom__'?(rsNameCustom.value.trim()||'Supervisor remoto'):(rsNamePreset.value||'Supervisor remoto')}
-function remotePayload(){return {id:rsId.value.trim()||undefined,name:remoteNameValue(),telegramChatId:rsTelegramMode.value==='custom'?(rsTelegram.value.trim()||null):null,sellers:getSelectedValues(rsSellerSelect),startTime:rsStart.value||'09:00',endTime:rsEnd.value||'17:00',frequencyMinutes:Number(rsFreq.value||30),pauses:[{start:rsPauseStart.value||'12:00',end:rsPauseEnd.value||'13:00'}],enabled:rsEnabled.checked,timezone:'America/Argentina/Buenos_Aires'} }
-function sellerLabelMapFromStatus(latestRun){const map=new Map();const bySeller=latestRun?.report?.followUps?.bySeller||{};Object.keys(bySeller).forEach(k=>map.set(k,k));(latestRun?.report?.sellers||[]).forEach(s=>{const value=s.email||s.owner||s.raw||s.id||s.label;const label=s.label||s.name||value;if(value)map.set(String(value),String(label))});return map}
-async function loadRemoteOptions(){try{const [cfgResp,statusResp]=await Promise.all([fetch('/api/supervisor/remote/configs',{headers:headers()}),fetch('/api/core/status',{headers:headers()})]);const cfgData=await cfgResp.json().catch(()=>({supervisors:[]}));const statusData=await statusResp.json().catch(()=>({}));const supervisors=cfgData.supervisors||[];rsConfigSelect.innerHTML='<option value="">+ Nuevo supervisor remoto</option>' + supervisors.map(x=>`<option value="${x.id}">${x.name||x.id}</option>`).join('');const sellerMap=sellerLabelMapFromStatus(statusData.latestRun);supervisors.forEach(s=>(s.sellers||[]).forEach(v=>sellerMap.set(String(v),String(v))));const sellerEntries=[...sellerMap.entries()].sort((a,b)=>String(a[1]).localeCompare(String(b[1])));rsSellerSelect.innerHTML=sellerEntries.map(([value,label])=>`<option value="${String(value).replace(/"/g,'&quot;')}">${label}</option>`).join('');if(!rsSellerSelect.innerHTML)rsSellerSelect.innerHTML='<option value="" disabled>Primero ejecutá Supervisor para cargar vendedores</option>';window.__remoteSupervisors=supervisors}catch(e){console.error(e)}}
-function applySupervisorConfig(first){if(!first)return;rsId.value=first.id||'';rsConfigSelect.value=first.id||'';const presetOptions=Array.from(rsNamePreset.options).map(o=>o.value);if(presetOptions.includes(first.name||'')){rsNamePreset.value=first.name||'Supervisor remoto';rsNameCustom.value=''}else{rsNamePreset.value='__custom__';rsNameCustom.value=first.name||''}toggleRemoteNameCustom();if(first.telegramChatId){rsTelegramMode.value='custom';rsTelegram.value=first.telegramChatId||''}else{rsTelegramMode.value='general';rsTelegram.value=''}toggleRemoteTelegramCustom();setSelectedValues(rsSellerSelect,first.sellers||[]);rsStart.value=first.startTime||'09:00';rsEnd.value=first.endTime||'17:00';rsFreq.value=first.frequencyMinutes||30;rsPauseStart.value=first.pauses?.[0]?.start||'12:00';rsPauseEnd.value=first.pauses?.[0]?.end||'13:00';rsEnabled.checked=first.enabled!==false}
-rsConfigSelect?.addEventListener('change',()=>{const id=rsConfigSelect.value;const first=(window.__remoteSupervisors||[]).find(x=>x.id===id);if(!id){resetRemoteForm();return}applySupervisorConfig(first)})
-async function saveRemoteSupervisor(){const d=await request('/api/supervisor/remote/config',{method:'POST',headers:headers(true),body:JSON.stringify(remotePayload())});const x=d.supervisor;if(x){rsId.value=x.id||'';await loadRemoteOptions();rsConfigSelect.value=x.id||'';applySupervisorConfig(x);show(d);alert('Configuración de supervisor guardada.')}}
-async function loadRemoteSupervisors(){const d=await request('/api/supervisor/remote/configs',{headers:headers()});window.__remoteSupervisors=d.supervisors||[];await loadRemoteOptions();const first=d.supervisors?.[0];if(first)applySupervisorConfig(first)}
-async function runRemoteSupervisor(send){const supervisorId=(rsConfigSelect.value||rsId.value||'').trim();if(!supervisorId){alert('Primero guardá la configuración.');return}const d=await request('/api/supervisor/remote/run',{method:'POST',headers:headers(true),body:JSON.stringify({supervisorId,send,force:true})});if(d.result?.report)setReport(d.result.report);if(send&&d.result?.sent)alert('Reporte enviado al supervisor remoto por Telegram.')}
-async function runRemoteTick(){const d=await request('/api/supervisor/remote/tick',{method:'POST',headers:headers(true),body:JSON.stringify({send:true})});show(d)}
-async function createRemoteAction(){const body={supervisorId:(rsConfigSelect.value||rsId.value||'manual'),seller:raSeller.value.trim(),conversationId:raConversation.value.trim(),actionType:raType.value,reason:raReason.value.trim(),expectedBehavior:raExpected.value.trim()};const d=await request('/api/supervisor/remote/action',{method:'POST',headers:headers(true),body:JSON.stringify(body)});if(d.action?.duplicate)alert('Ya existe una corrección abierta igual. No se duplicó.');else alert('Corrección creada. Se verificará contra la próxima acción del vendedor.')}
+function toggleRemoteTelegramCustom(){rsTelegram.style.display=rsTelegramMode.value==='custom'?'block':'none'}
+function resetRemoteForm(){rsConfigSelect.value='';rsId.value='';rsNameCustom.value='Supervisor Comercial Remoto';clearSellerSelection();setCheckedValues('.weekdayCb',['Mon','Tue','Wed','Thu','Fri']);rsStart.value='09:00';rsEnd.value='17:00';rsPauseStart.value='12:00';rsPauseEnd.value='13:00';rsFreq.value='30';rsTelegramMode.value='custom';rsTelegram.value='';toggleRemoteTelegramCustom();rsWeekendEnabled.checked=true;setCheckedValues('.weekendCb',['Sat','Sun']);rsWeekendFreq.value='120';rsWeekendSignal.value='MUY_INTERESANTE';rsEnabled.checked=true}
+function remotePayload(){return{id:rsId.value.trim()||undefined,name:rsNameCustom.value.trim()||'Supervisor Comercial Remoto',telegramChatId:rsTelegramMode.value==='custom'?(rsTelegram.value.trim()||null):null,sellers:getSelectedValues(rsSellerSelect),weekdays:checkedValues('.weekdayCb'),startTime:rsStart.value||'09:00',endTime:rsEnd.value||'17:00',frequencyMinutes:Number(rsFreq.value||30),pauses:[{start:rsPauseStart.value||'12:00',end:rsPauseEnd.value||'13:00'}],weekend:{enabled:rsWeekendEnabled.checked,days:checkedValues('.weekendCb'),frequencyMinutes:Number(rsWeekendFreq.value||120),minimumSignal:rsWeekendSignal.value||'MUY_INTERESANTE'},enabled:rsEnabled.checked,timezone:'America/Argentina/Buenos_Aires'}}
+async function loadRemoteOptions(){try{const [cfg,sellers]=await Promise.all([request('/api/supervisor/remote/configs',{headers:headers()}),request('/api/supervisor/remote/sellers',{headers:headers()})]);window.__remoteSupervisors=cfg.supervisors||[];rsConfigSelect.innerHTML='<option value="">+ Nuevo supervisor</option>'+(cfg.supervisors||[]).map(x=>`<option value="${x.id}">${x.name||x.id}</option>`).join('');rsSellerSelect.innerHTML=(sellers.sellers||[]).map(x=>{const v=typeof x==='string'?x:x.id,l=typeof x==='string'?x:(x.label||x.id);return `<option value="${String(v).replace(/"/g,'&quot;')}">${l}</option>`}).join('');if(!rsSellerSelect.innerHTML)rsSellerSelect.innerHTML='<option value="" disabled>Ejecutá Supervisor una vez para cargar vendedores</option>'}catch(e){console.error(e)}}
+function applySupervisorConfig(x){if(!x)return;rsId.value=x.id||'';rsConfigSelect.value=x.id||'';rsNameCustom.value=x.name||'Supervisor Comercial Remoto';setSelectedValues(rsSellerSelect,x.sellers||[]);setCheckedValues('.weekdayCb',x.weekdays||['Mon','Tue','Wed','Thu','Fri']);rsStart.value=x.startTime||'09:00';rsEnd.value=x.endTime||'17:00';rsPauseStart.value=x.pauses?.[0]?.start||'12:00';rsPauseEnd.value=x.pauses?.[0]?.end||'13:00';rsFreq.value=String(x.frequencyMinutes||30);if(x.telegramChatId){rsTelegramMode.value='custom';rsTelegram.value=x.telegramChatId}else{rsTelegramMode.value='general';rsTelegram.value=''}toggleRemoteTelegramCustom();rsWeekendEnabled.checked=x.weekend?.enabled!==false;setCheckedValues('.weekendCb',x.weekend?.days||['Sat','Sun']);rsWeekendFreq.value=String(x.weekend?.frequencyMinutes||120);rsWeekendSignal.value=x.weekend?.minimumSignal||'MUY_INTERESANTE';rsEnabled.checked=x.enabled!==false}
+rsConfigSelect?.addEventListener('change',()=>{const x=(window.__remoteSupervisors||[]).find(v=>v.id===rsConfigSelect.value);if(x)applySupervisorConfig(x);else resetRemoteForm()})
+async function saveRemoteSupervisor(){const d=await request('/api/supervisor/remote/config',{method:'POST',headers:headers(true),body:JSON.stringify(remotePayload())});await loadRemoteOptions();applySupervisorConfig(d.supervisor);alert('Configuración guardada.')}
+async function loadRemoteSupervisors(){await loadRemoteOptions();const x=(window.__remoteSupervisors||[])[0];if(x)applySupervisorConfig(x)}
+async function runRemoteSupervisor(send){const supervisorId=(rsConfigSelect.value||rsId.value||'').trim();if(!supervisorId){alert('Primero guardá la configuración.');return}const d=await request('/api/supervisor/remote/run',{method:'POST',headers:headers(true),body:JSON.stringify({supervisorId,send,force:true})});if(d.result?.report)setReport(d.result.report);if(send&&d.result?.sent)alert('Prueba enviada.')}
 async function verifyRemoteActions(){const d=await request('/api/supervisor/remote/verify',{method:'POST',headers:headers(true),body:JSON.stringify({limit:100})});show(d)}
-async function loadSellerCompliance(){const seller=raSeller.value.trim();if(!seller){alert('Ingresá el vendedor en Crear corrección puntual.');return}await request('/api/supervisor/remote/compliance?seller='+encodeURIComponent(seller),{headers:headers()})}
-
-health().then(()=>integrationStatus()).then(()=>loadRemoteOptions()).catch(()=>{});
+health().then(()=>integrationStatus()).then(()=>loadRemoteOptions()).then(()=>toggleRemoteTelegramCustom()).catch(()=>{});
 </script></body></html>

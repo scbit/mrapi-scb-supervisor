@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Remote Supervisor UI dropdown improvements",
+  "description": "SUPERVISOR SCB V3 - Simple remote supervisor UI + weekday/weekend guard mode",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
