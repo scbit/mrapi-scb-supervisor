@@ -30,6 +30,9 @@ function normalizeSupervisorConfig(input={},existing={}){
     enabled:input.enabled===undefined?(existing.enabled!==false):!!input.enabled,
     channel:'telegram',
     telegramChatId:String(input.telegramChatId??existing.telegramChatId??'').trim()||null,
+    emailTo:String(input.emailTo??existing.emailTo??'').trim()||null,
+    sendTelegram:input.sendTelegram===undefined?(existing.sendTelegram!==false):!!input.sendTelegram,
+    sendEmail:input.sendEmail===undefined?!!existing.sendEmail:!!input.sendEmail,
     sellers:asList(input.sellers===undefined?existing.sellers:input.sellers),
     timezone:String(input.timezone||existing.timezone||'America/Argentina/Buenos_Aires'),
     weekdays:normalizeDays(input.weekdays===undefined?existing.weekdays:input.weekdays,DEFAULT_WEEKDAYS),
@@ -63,19 +66,29 @@ function actionRubric(type,custom){const rows=asList(custom);return rows.length?
 function signalRank(v){return {NORMAL:0,INTERESANTE:1,MUY_INTERESANTE:2,URGENTE:3,CRITICA:4}[String(v||'').toUpperCase()]??0}
 
 class RemoteSupervisorService{
-  constructor({config,store,inbox,crm,aiProvider,telegram}){this.config=config;this.store=store;this.inbox=inbox;this.crm=crm;this.ai=aiProvider;this.telegram=telegram}
+  constructor({config,store,inbox,crm,aiProvider,telegram,email}){this.config=config;this.store=store;this.inbox=inbox;this.crm=crm;this.ai=aiProvider;this.telegram=telegram;this.email=email}
   async listSupervisors(){return this.store.listRemoteSupervisors()}
   async saveSupervisor(data){const existing=data?.id?await this.store.getRemoteSupervisor(data.id):null;const cfg=normalizeSupervisorConfig(data,existing||{});if(mins(cfg.endTime)<=mins(cfg.startTime))throw new Error('REMOTE_SUPERVISOR_INVALID_HOURS');await this.store.saveRemoteSupervisor(cfg.id,cfg);return cfg}
   async listSellerOptions(){
+    const map=new Map();
     if(this.crm?.listUsers){
-      const users=await this.crm.listUsers(500);
-      const rows=users.filter(u=>{const role=String(u.role||u.type||'').toLowerCase();const active=u.active!==false&&u.enabled!==false;return active&&(role==='seller'||role==='vendedor'||role==='sales'||role==='commercial'||role==='comercial')})
-        .map(u=>({id:String(u.email||u.id||u.name||'').trim(),label:String(u.name||u.displayName||u.email||u.id||'').trim()})).filter(x=>x.id&&x.label);
-      if(rows.length)return rows.sort((a,b)=>a.label.localeCompare(b.label));
+      const users=await this.crm.listUsers(1000);
+      for(const u of users){
+        if(u.active===false||u.enabled===false||u.disabled===true)continue;
+        const id=String(u.email||u.id||u.uid||u.name||'').trim();
+        const label=String(u.displayName||u.fullName||u.name||u.label||u.email||u.id||'').trim();
+        if(!id||!label)continue;
+        map.set(id.toLowerCase(),{id,label,email:String(u.email||'').trim()||null,role:String(u.role||u.type||u.profile||'').trim()||null,source:'crm_users'});
+      }
     }
-    const convs=await this.store.listConversationStates(5000),map=new Map();
-    for(const r of convs){const s=r.metrics?.owner||r.snapshot?.owner;if(s&&!/basura@|noreply@/i.test(String(s)))map.set(normSeller(s),{id:String(s),label:String(s)})}
-    return [...map.values()].sort((a,b)=>a.label.localeCompare(b.label));
+    const deals=await this.store.listAllDeals(20000).catch(()=>[]);
+    for(const d of deals){
+      const owner=String(d.owner||d.ownerName||d.ownerEmail||d.snapshot?.owner||'').trim();
+      if(!owner)continue;
+      const k=owner.toLowerCase();
+      if(!map.has(k))map.set(k,{id:owner,label:owner,email:owner.includes('@')?owner:null,role:null,source:'crm_deals'});
+    }
+    return [...map.values()].sort((a,b)=>a.label.localeCompare(b.label,'es',{sensitivity:'base'}));
   }
   async createAction(input={}){
     const type=String(input.actionType||'').toUpperCase();if(!ACTION_TYPES.includes(type))throw new Error('REMOTE_ACTION_TYPE_INVALID');
@@ -132,7 +145,11 @@ class RemoteSupervisorService{
       await this.store.saveRemoteReport(report.id,report);let sent=null;if(send)sent=await this.telegram.send(report.text);return{skipped:false,mode:'weekend_guard',report,sent};
     }
     const last=await this.store.getRemoteCheckpoint(`last_send_${cfg.id}`);if(!force&&last?.at&&now.getTime()-new Date(last.at).getTime()<cfg.frequencyMinutes*60000)return{skipped:true,reason:'frequency_not_due'};
-    const verified=await this.verifyPending(),report=await this.buildSupervisorReport(cfg.id,{now});let sent=null;if(send){sent=await this.telegram.send(report.text,cfg.telegramChatId||undefined);await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id})}return{skipped:false,mode:'weekday',verified,report,sent};
+    const verified=await this.verifyPending(),report=await this.buildSupervisorReport(cfg.id,{now});let sent={telegram:null,email:null};if(send){
+      if(cfg.sendTelegram!==false)sent.telegram=await this.telegram.send(report.text,cfg.telegramChatId||undefined);
+      if(cfg.sendEmail&&cfg.emailTo&&this.email)sent.email=await this.email.send({to:cfg.emailTo,subject:`SUPERVISOR SCB — ${cfg.name}`,bodyText:report.text,operationId:`remote-${cfg.id}-${Date.now()}`,source:'supervisor-scb-remote'});
+      await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id});
+    }return{skipped:false,mode:'weekday',verified,report,sent};
   }
   async tick({now=new Date(),send=true}={}){const configs=(await this.listSupervisors()).filter(x=>x.enabled),results=[];for(const cfg of configs){try{results.push({supervisorId:cfg.id,...await this.runSupervisor(cfg.id,{now,send})})}catch(e){results.push({supervisorId:cfg.id,error:e.message})}}return{at:now.toISOString(),results}}
   async sellerCompliance(seller){const rows=await this.store.listSupervisionActionsForSeller(seller,500),verified=rows.filter(x=>x.status==='VERIFIED').length,failed=rows.filter(x=>x.status==='FAILED').length,total=verified+failed,byType={};for(const r of rows)byType[r.actionType]=(byType[r.actionType]||0)+1;return{seller,total,verified,failed,pending:rows.filter(x=>['PENDING','WAITING_FOR_ACTION'].includes(x.status)).length,compliancePct:total?Math.round(verified/total*100):null,byType}}

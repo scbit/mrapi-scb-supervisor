@@ -19,13 +19,14 @@ class EmailAdapter{
     if(!r.ok||data.ok===false)throw new Error(`EMAIL_SERVICE_UNAVAILABLE:${data.error||r.status}`);
     return{ok:true,connectivity:true,service:data.service||data.app||'mrapi-email',version:data.version||null,configuration:this.configStatus(),note:'La conectividad está validada. Token de sistema, accountKey y SMTP se validan con Probar Email.'};
   }
-  async send({subject,bodyText,bodyHtml,operationId,source='supervisor-scb'}){
-    if(!this.isConfigured())throw new Error('EMAIL_NOT_CONFIGURED');
-    const payload={accountKey:this.accountKey,to:this.to,subject:clean(subject)||'SUPERVISOR SCB',bodyText:String(bodyText||''),bodyHtml:String(bodyHtml||textToHtml(bodyText||'')),source,operationId:clean(operationId)};
+  async send({subject,bodyText,bodyHtml,operationId,source='supervisor-scb',to=null}){
+    const recipient=clean(to)||this.to;
+    if(!(this.baseUrl&&this.systemToken&&this.accountKey&&recipient))throw new Error('EMAIL_NOT_CONFIGURED');
+    const payload={accountKey:this.accountKey,to:recipient,subject:clean(subject)||'SUPERVISOR SCB',bodyText:String(bodyText||''),bodyHtml:String(bodyHtml||textToHtml(bodyText||'')),source,operationId:clean(operationId)};
     const r=await this.fetch(`${this.baseUrl}/api/system/send-email`,{method:'POST',headers:{'content-type':'application/json','x-system-token':this.systemToken},body:JSON.stringify(payload)});
     let data={};try{data=await r.json()}catch{}
     if(!r.ok||!data.ok)throw new Error(`EMAIL_SEND_FAILED:${data.error||r.status}`);
-    return{ok:true,logId:data.logId||null,messageId:data.messageId||null,accountId:data.accountId||null,accountKey:data.accountKey||this.accountKey,imapSaved:!!data.imapSaved,to:this.to};
+    return{ok:true,logId:data.logId||null,messageId:data.messageId||null,accountId:data.accountId||null,accountKey:data.accountKey||this.accountKey,imapSaved:!!data.imapSaved,to:recipient};
   }
 }
 module.exports={EmailAdapter,textToHtml};
