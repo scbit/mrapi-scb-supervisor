@@ -162,4 +162,4 @@ function emailHtml(report){
   return `<!doctype html><html><body><table role="presentation" width="100%"><tr><td><h1>SUPERVISOR SCB — CIERRE GERENCIAL</h1><h2>RENDIMIENTO POR VENDEDOR</h2><table role="presentation"><tr><th>Vendedor</th><th>Chats</th><th>Sin respuesta</th><th>Tarde</th></tr>${rows}</table></td></tr></table></body></html>`;
 }
 
-module.exports={DailyGerencialService,analyzeConversation,analyzeDailyConversation:analyzeConversation,applyAi,needsAi,summary,aggregateLeadQuality,buildLeadQualityInsights,managerText,html,hubUrl,localDayRange,businessRange,telegramText,emailHtml};
+module.exports={DailyGerencialService,analyzeConversation,analyzeDailyConversation:analyzeConversation,applyAi,needsAi,summary,aggregateLeadQuality,buildLeadQualityInsights,managerText,html,hubUrl,localDayRange,businessRange,telegramText,emailHtml,exclusionReason};

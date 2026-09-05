@@ -77,5 +77,5 @@ test('qualitative correction evaluates next seller intervention and closes VERIF
 
 test('0.10.0 UI exposes automatic coaching controls',()=>{
   const html=fs.readFileSync('public/index.html','utf8');
-  for(const x of ['Coaching automático','coachingEnabled','coachingWaiting','coachingAiMax','Analizar / Probar'])assert.ok(html.includes(x),x);
+  for(const x of ['Supervisor Diario en Vivo','coachingEnabled','liveDeliveryMode','MODO PRUEBA','Analizar día / Probar'])assert.ok(html.includes(x),x);
 });

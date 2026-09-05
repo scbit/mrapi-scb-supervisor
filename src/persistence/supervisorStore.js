@@ -1,4 +1,4 @@
-class SupervisorStore{constructor(db){this.db=db;this.c={conversations:'supervisor_v3_conversation_state',deals:'supervisor_v3_deal_state',hunter:'supervisor_v3_hunter_event_state',checkpoints:'supervisor_v3_checkpoints',runs:'supervisor_v3_runs',events:'supervisor_v3_events',reports:'supervisor_v3_reports',dailyReports:'supervisor_v3_daily_reports',dailyJobs:'supervisor_v3_daily_jobs',dailyItems:'supervisor_v3_daily_items',dailyReviews:'supervisor_v3_daily_reviews',remoteSupervisors:'supervisor_v3_remote_supervisors',supervisionActions:'supervisor_v3_supervision_actions',remoteReports:'supervisor_v3_remote_reports',remoteCheckpoints:'supervisor_v3_remote_checkpoints'}}
+class SupervisorStore{constructor(db){this.db=db;this.c={conversations:'supervisor_v3_conversation_state',deals:'supervisor_v3_deal_state',hunter:'supervisor_v3_hunter_event_state',checkpoints:'supervisor_v3_checkpoints',runs:'supervisor_v3_runs',events:'supervisor_v3_events',reports:'supervisor_v3_reports',dailyReports:'supervisor_v3_daily_reports',dailyJobs:'supervisor_v3_daily_jobs',dailyItems:'supervisor_v3_daily_items',dailyReviews:'supervisor_v3_daily_reviews',remoteSupervisors:'supervisor_v3_remote_supervisors',supervisionActions:'supervisor_v3_supervision_actions',remoteReports:'supervisor_v3_remote_reports',remoteCheckpoints:'supervisor_v3_remote_checkpoints',liveDailyCases:'supervisor_v3_live_daily_cases',liveDailyObservations:'supervisor_v3_live_daily_observations',liveDailyReports:'supervisor_v3_live_daily_reports'}}
 async getCheckpoint(id){const d=await this.db.collection(this.c.checkpoints).doc(id).get();return d.exists?d.data():null}async saveCheckpoint(id,data){await this.db.collection(this.c.checkpoints).doc(id).set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async getConversationState(id){const d=await this.db.collection(this.c.conversations).doc(String(id)).get();return d.exists?{id:d.id,...d.data()}:null}async saveConversationState(id,data){await this.db.collection(this.c.conversations).doc(String(id)).set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async listWaiting(limit=500){const s=await this.db.collection(this.c.conversations).where('currentWaiting','==',true).limit(limit).get();return s.docs.map(d=>({id:d.id,...d.data()}))}async listPending(limit=500){const rows=await this.listWaiting(limit);return rows.filter(x=>x.metrics?.pendingAssignment)}async listConversationStates(limit=5000){const s=await this.db.collection(this.c.conversations).limit(limit).get();return s.docs.map(d=>({id:d.id,...d.data()}))}
@@ -28,6 +28,53 @@ async getLatestRemoteReport(supervisorId){const s=await this.db.collection(this.
 async saveRemoteCheckpoint(id,data){await this.db.collection(this.c.remoteCheckpoints).doc(String(id)).set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async getRemoteCheckpoint(id){const d=await this.db.collection(this.c.remoteCheckpoints).doc(String(id)).get();return d.exists?d.data():null}
 
+
+async listConversationStatesSince(since,limit=2000){
+  const iso=since instanceof Date?since.toISOString():String(since||'');
+  if(!iso)return[];
+  try{
+    const s=await this.db.collection(this.c.conversations).where('metrics.lastMessageAt','>=',iso).orderBy('metrics.lastMessageAt','asc').limit(limit).get();
+    return s.docs.map(d=>({id:d.id,...d.data()}));
+  }catch(_){
+    const s=await this.db.collection(this.c.conversations).limit(Math.max(limit,5000)).get();
+    return s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>String(x.metrics?.lastMessageAt||x.updatedAt||'')>=iso).slice(0,limit);
+  }
+}
+async getLiveDailyCase(date,conversationId){
+  const id=`${date}__${Buffer.from(String(conversationId)).toString('base64url').slice(0,160)}`;
+  const d=await this.db.collection(this.c.liveDailyCases).doc(id).get();
+  return d.exists?{id:d.id,...d.data()}:null;
+}
+async saveLiveDailyCase(date,conversationId,data){
+  const id=`${date}__${Buffer.from(String(conversationId)).toString('base64url').slice(0,160)}`;
+  await this.db.collection(this.c.liveDailyCases).doc(id).set({date,conversationId,...data,updatedAt:new Date().toISOString()},{merge:true});
+  return id;
+}
+async listLiveDailyCases(date,sellerKeys=[],limit=2000){
+  const wanted=new Set((sellerKeys||[]).map(x=>String(x||'').trim().toLowerCase()).filter(Boolean));
+  const s=await this.db.collection(this.c.liveDailyCases).where('date','==',String(date)).limit(limit).get();
+  return s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!wanted.size||wanted.has(String(x.sellerKey||x.row?.seller||x.row?.owner||'').toLowerCase()));
+}
+async saveLiveDailyObservation(id,data){
+  await this.db.collection(this.c.liveDailyObservations).doc(String(id)).set({...data,id:String(id),updatedAt:new Date().toISOString()},{merge:true});
+}
+async listLiveDailyObservationsForSellers(sellerKeys=[],limit=2000){
+  const wanted=new Set((sellerKeys||[]).map(x=>String(x||'').trim().toLowerCase()).filter(Boolean));
+  const s=await this.db.collection(this.c.liveDailyObservations).limit(limit).get();
+  return s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!wanted.size||wanted.has(String(x.sellerKey||'').toLowerCase())).sort((a,b)=>String(b.openedAt||'').localeCompare(String(a.openedAt||'')));
+}
+async saveLiveDailyReport(id,data){
+  await this.db.collection(this.c.liveDailyReports).doc(String(id)).set({...data,id:String(id),updatedAt:new Date().toISOString()},{merge:true});
+}
+async getLatestLiveDailyReport(supervisorId){
+  const s=await this.db.collection(this.c.liveDailyReports).limit(1000).get();
+  const rows=s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>String(x.supervisorId)===String(supervisorId)).sort((a,b)=>String(b.generatedAt||'').localeCompare(String(a.generatedAt||'')));
+  return rows[0]||null;
+}
+async listLatestLiveDailyReports(limit=1000){
+  const s=await this.db.collection(this.c.liveDailyReports).limit(limit).get();
+  return s.docs.map(d=>({id:d.id,...d.data()}));
+}
 
 async saveSupervisionSettings(data){await this.db.collection('supervisor_v3_supervision_settings').doc('global').set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async getSupervisionSettings(){const d=await this.db.collection('supervisor_v3_supervision_settings').doc('global').get();return d.exists?{id:d.id,...d.data()}:null}
