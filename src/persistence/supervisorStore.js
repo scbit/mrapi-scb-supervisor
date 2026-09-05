@@ -28,5 +28,9 @@ async getLatestRemoteReport(supervisorId){const s=await this.db.collection(this.
 async saveRemoteCheckpoint(id,data){await this.db.collection(this.c.remoteCheckpoints).doc(String(id)).set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async getRemoteCheckpoint(id){const d=await this.db.collection(this.c.remoteCheckpoints).doc(String(id)).get();return d.exists?d.data():null}
 
+
+async saveSupervisionSettings(data){await this.db.collection('supervisor_v3_supervision_settings').doc('global').set({...data,updatedAt:new Date().toISOString()},{merge:true})}
+async getSupervisionSettings(){const d=await this.db.collection('supervisor_v3_supervision_settings').doc('global').get();return d.exists?{id:d.id,...d.data()}:null}
+
 }
 module.exports={SupervisorStore};

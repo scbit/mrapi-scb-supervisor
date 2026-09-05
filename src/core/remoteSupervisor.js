@@ -30,9 +30,6 @@ function normalizeSupervisorConfig(input={},existing={}){
     enabled:input.enabled===undefined?(existing.enabled!==false):!!input.enabled,
     channel:'telegram',
     telegramChatId:String(input.telegramChatId??existing.telegramChatId??'').trim()||null,
-    emailTo:String(input.emailTo??existing.emailTo??'').trim()||null,
-    sendTelegram:input.sendTelegram===undefined?(existing.sendTelegram!==false):!!input.sendTelegram,
-    sendEmail:input.sendEmail===undefined?!!existing.sendEmail:!!input.sendEmail,
     sellers:asList(input.sellers===undefined?existing.sellers:input.sellers),
     timezone:String(input.timezone||existing.timezone||'America/Argentina/Buenos_Aires'),
     weekdays:normalizeDays(input.weekdays===undefined?existing.weekdays:input.weekdays,DEFAULT_WEEKDAYS),
@@ -66,7 +63,7 @@ function actionRubric(type,custom){const rows=asList(custom);return rows.length?
 function signalRank(v){return {NORMAL:0,INTERESANTE:1,MUY_INTERESANTE:2,URGENTE:3,CRITICA:4}[String(v||'').toUpperCase()]??0}
 
 class RemoteSupervisorService{
-  constructor({config,store,inbox,crm,aiProvider,telegram,email}){this.config=config;this.store=store;this.inbox=inbox;this.crm=crm;this.ai=aiProvider;this.telegram=telegram;this.email=email}
+  constructor({config,store,inbox,crm,aiProvider,telegram}){this.config=config;this.store=store;this.inbox=inbox;this.crm=crm;this.ai=aiProvider;this.telegram=telegram}
   async listSupervisors(){return this.store.listRemoteSupervisors()}
   async saveSupervisor(data){const existing=data?.id?await this.store.getRemoteSupervisor(data.id):null;const cfg=normalizeSupervisorConfig(data,existing||{});if(mins(cfg.endTime)<=mins(cfg.startTime))throw new Error('REMOTE_SUPERVISOR_INVALID_HOURS');await this.store.saveRemoteSupervisor(cfg.id,cfg);return cfg}
   async listSellerOptions(){
@@ -78,17 +75,76 @@ class RemoteSupervisorService{
         const id=String(u.email||u.id||u.uid||u.name||'').trim();
         const label=String(u.displayName||u.fullName||u.name||u.label||u.email||u.id||'').trim();
         if(!id||!label)continue;
-        map.set(id.toLowerCase(),{id,label,email:String(u.email||'').trim()||null,role:String(u.role||u.type||u.profile||'').trim()||null,source:'crm_users'});
+        map.set(id.toLowerCase(),{id,label,email:String(u.email||'').trim()||null,source:'CRM/HUB'});
       }
     }
     const deals=await this.store.listAllDeals(20000).catch(()=>[]);
     for(const d of deals){
-      const owner=String(d.owner||d.ownerName||d.ownerEmail||d.snapshot?.owner||'').trim();
-      if(!owner)continue;
-      const k=owner.toLowerCase();
-      if(!map.has(k))map.set(k,{id:owner,label:owner,email:owner.includes('@')?owner:null,role:null,source:'crm_deals'});
+      const owner=String(d.owner||d.ownerName||d.ownerEmail||d.snapshot?.owner||'').trim();if(!owner)continue;
+      const k=owner.toLowerCase();if(!map.has(k))map.set(k,{id:owner,label:owner,email:owner.includes('@')?owner:null,source:'CRM/HUB owner'});
     }
     return [...map.values()].sort((a,b)=>a.label.localeCompare(b.label,'es',{sensitivity:'base'}));
+  }
+
+  defaultNetworkSettings(){
+    return{timezone:'America/Argentina/Buenos_Aires',
+      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:30,generalFrequencyMinutes:60,generalChatId:null},
+      weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
+    };
+  }
+  async getNetworkSetup(){
+    const defaults=this.defaultNetworkSettings(),saved=await this.store.getSupervisionSettings()||{},settings={...defaults,...saved,weekday:{...defaults.weekday,...(saved.weekday||{})},weekend:{...defaults.weekend,...(saved.weekend||{})}};
+    const supervisors=(await this.listSupervisors()).filter(x=>x.mode==='SELLER_GROUP');
+    return{settings,sellers:await this.listSellerOptions(),sellerGroups:supervisors};
+  }
+  async saveNetworkSetup(input={}){
+    const base=this.defaultNetworkSettings(),old=await this.store.getSupervisionSettings()||{},raw=input.settings||{};
+    const settings={...base,...old,...raw,weekday:{...base.weekday,...(old.weekday||{}),...(raw.weekday||{})},weekend:{...base.weekend,...(old.weekend||{}),...(raw.weekend||{})}};
+    await this.store.saveSupervisionSettings(settings);
+    const results=[];
+    for(const row of input.sellerGroups||[]){
+      const sellerId=String(row.sellerId||'').trim();if(!sellerId)continue;
+      const id='seller_group__'+Buffer.from(sellerId).toString('base64url').slice(0,160);
+      const existing=await this.store.getRemoteSupervisor(id)||{};
+      const cfg=normalizeSupervisorConfig({
+        ...existing,id,mode:'SELLER_GROUP',name:String(row.sellerLabel||sellerId),sellers:[sellerId],
+        telegramChatId:String(row.telegramChatId||'').trim()||null,enabled:row.enabled!==false,
+        weekdays:settings.weekday.days,startTime:settings.weekday.startTime,endTime:settings.weekday.endTime,
+        pauses:[{start:settings.weekday.pauseStart,end:settings.weekday.pauseEnd}],frequencyMinutes:settings.weekday.sellerFrequencyMinutes
+      },existing);
+      cfg.mode='SELLER_GROUP';cfg.sellerId=sellerId;cfg.sellerLabel=String(row.sellerLabel||sellerId);await this.store.saveRemoteSupervisor(id,cfg);results.push(cfg);
+    }
+    return{settings,sellerGroups:results};
+  }
+  async buildGeneralSummary({now=new Date()}={}){
+    const setup=await this.getNetworkSetup(),active=setup.sellerGroups.filter(x=>x.enabled!==false),wanted=new Set(active.flatMap(x=>x.sellers||[]).map(normSeller));
+    const convs=await this.store.listConversationStates(5000),mine=convs.filter(c=>wanted.has(normSeller(c.metrics?.owner||c.snapshot?.owner)));
+    const waiting=mine.filter(c=>c.currentWaiting===true||c.metrics?.currentWaiting===true);
+    const actions=await this.store.listSupervisionActionsForSellers([...wanted],500),pending=actions.filter(a=>['PENDING','WAITING_FOR_ACTION'].includes(a.status)),failed=actions.filter(a=>a.status==='FAILED'),verified=actions.filter(a=>a.status==='VERIFIED');
+    const lines=['📊 SUPERVISIÓN GENERAL',`Vendedores supervisados: ${active.length}`,`Clientes esperando: ${waiting.length}`,`Correcciones pendientes: ${pending.length}`,`Correcciones no aplicadas: ${failed.length}`,`Correcciones aplicadas: ${verified.length}`];
+    const bySeller=new Map();for(const c of waiting){const seller=c.metrics?.owner||c.snapshot?.owner||'Sin asignar';bySeller.set(seller,(bySeller.get(seller)||0)+1)}
+    if(bySeller.size){lines.push('','⚠️ MAYOR ATENCIÓN');[...bySeller.entries()].sort((a,b)=>b[1]-a[1]).slice(0,8).forEach(([s,n])=>lines.push(`• ${s} — ${n} esperando`))}
+    return{id:id('general_summary'),mode:'general',generatedAt:now.toISOString(),summary:{sellers:active.length,waiting:waiting.length,pending:pending.length,failed:failed.length,verified:verified.length},text:lines.join('\\n')};
+  }
+  async buildWeekendGlobalReport({now=new Date()}={}){
+    const setup=await this.getNetworkSetup(),w=setup.settings.weekend,freq=Number(w.frequencyMinutes||120),from=new Date(now.getTime()-freq*60000);
+    const dayStart=new Date(now);const parts=new Intl.DateTimeFormat('en-CA',{timeZone:setup.settings.timezone,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(now);const obj={};for(const x of parts)obj[x.type]=x.value;
+    const fromNine=new Date(`${obj.year}-${obj.month}-${obj.day}T09:00:00-03:00`);
+    const convs=await this.inbox.listConversationsInRange({from:fromNine,to:now,limit:1000}),recent=convs.filter(c=>new Date(c.lastMessageAt||0)>=from);
+    const newSinceNine=convs.filter(c=>c.createdAt&&new Date(c.createdAt)>=fromNine),newRecent=newSinceNine.filter(c=>new Date(c.createdAt)>=from);
+    const adsRecent=newRecent.filter(c=>String(c.sourceChannel||'').toLowerCase().includes('meta')||!!c.adId||!!c.adTitle),unassignedRecent=newRecent.filter(c=>!c.owner&&!c.dealId);
+    const alerts=[];
+    if(w.alertImportant!==false){
+      for(const c of recent){
+        const messages=await this.inbox.getMessages(c.id,80),clientMsgs=messages.filter(m=>m.actor==='client'&&new Date(m.timestamp||0)>=from);if(!clientMsgs.length)continue;
+        let evaluation={signal:'NORMAL',reason:'',summary:'',urgent:false};if(this.ai?.analyzeWeekendOpportunity)try{evaluation=await this.ai.analyzeWeekendOpportunity({conversation:c,messages:clientMsgs})}catch(_){}
+        if(signalRank(evaluation.signal)>=signalRank(w.minimumSignal||'MUY_INTERESANTE')||evaluation.urgent===true)alerts.push({conversation:c,evaluation});
+      }
+    }
+    const lines=['🌙 GUARDIA FIN DE SEMANA',`Revisión ${freq/60>=1?`cada ${freq/60} h`:`${freq} min`} · 09:00 a 24:00`,'',`Nuevos leads últimas ${freq/60}h: ${newRecent.length}`,`Meta Ads: ${adsRecent.length}`,`Sin vendedor asignado: ${unassignedRecent.length}`,`Nuevos leads desde las 09:00: ${newSinceNine.length}`];
+    if(alerts.length){lines.push('','🚨 ALERTAS IMPORTANTES');for(const x of alerts.slice(0,10)){const c=x.conversation,e=x.evaluation;lines.push(`${String(e.signal||'ALERTA').replaceAll('_',' ')} — ${c.contactName||'Cliente sin nombre'}${!c.owner&&!c.dealId?' · SIN ASIGNAR':''}`,e.summary||e.reason||'Oportunidad relevante',`https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`,'')}}
+    else lines.push('','✅ Sin urgencias ni oportunidades excepcionales en esta revisión.');
+    return{id:id('weekend_global'),mode:'weekend_guard',generatedAt:now.toISOString(),summary:{newRecent:newRecent.length,adsRecent:adsRecent.length,unassignedRecent:unassignedRecent.length,newSinceNine:newSinceNine.length,alerts:alerts.length},text:lines.join('\\n')};
   }
   async createAction(input={}){
     const type=String(input.actionType||'').toUpperCase();if(!ACTION_TYPES.includes(type))throw new Error('REMOTE_ACTION_TYPE_INVALID');
@@ -145,13 +201,30 @@ class RemoteSupervisorService{
       await this.store.saveRemoteReport(report.id,report);let sent=null;if(send)sent=await this.telegram.send(report.text);return{skipped:false,mode:'weekend_guard',report,sent};
     }
     const last=await this.store.getRemoteCheckpoint(`last_send_${cfg.id}`);if(!force&&last?.at&&now.getTime()-new Date(last.at).getTime()<cfg.frequencyMinutes*60000)return{skipped:true,reason:'frequency_not_due'};
-    const verified=await this.verifyPending(),report=await this.buildSupervisorReport(cfg.id,{now});let sent={telegram:null,email:null};if(send){
-      if(cfg.sendTelegram!==false)sent.telegram=await this.telegram.send(report.text,cfg.telegramChatId||undefined);
-      if(cfg.sendEmail&&cfg.emailTo&&this.email)sent.email=await this.email.send({to:cfg.emailTo,subject:`SUPERVISOR SCB — ${cfg.name}`,bodyText:report.text,operationId:`remote-${cfg.id}-${Date.now()}`,source:'supervisor-scb-remote'});
-      await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id});
-    }return{skipped:false,mode:'weekday',verified,report,sent};
+    const verified=await this.verifyPending(),report=await this.buildSupervisorReport(cfg.id,{now});let sent=null;if(send){sent=await this.telegram.send(report.text,cfg.telegramChatId||undefined);await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id})}return{skipped:false,mode:'weekday',verified,report,sent};
   }
-  async tick({now=new Date(),send=true}={}){const configs=(await this.listSupervisors()).filter(x=>x.enabled),results=[];for(const cfg of configs){try{results.push({supervisorId:cfg.id,...await this.runSupervisor(cfg.id,{now,send})})}catch(e){results.push({supervisorId:cfg.id,error:e.message})}}return{at:now.toISOString(),results}}
+  async testSellerGroup(sellerId,{send=false}={}){
+    const id='seller_group__'+Buffer.from(String(sellerId)).toString('base64url').slice(0,160),cfg=await this.store.getRemoteSupervisor(id);if(!cfg)throw new Error('SELLER_GROUP_NOT_CONFIGURED');
+    const report=await this.buildSupervisorReport(id,{now:new Date()});let sent=null;if(send){if(!cfg.telegramChatId)throw new Error('SELLER_GROUP_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,cfg.telegramChatId)}return{report,sent};
+  }
+  async testGeneral({send=false}={}){const setup=await this.getNetworkSetup(),report=await this.buildGeneralSummary();let sent=null;if(send){const chatId=setup.settings.weekday.generalChatId;if(!chatId)throw new Error('GENERAL_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,chatId)}return{report,sent}}
+  async testWeekend({send=false}={}){const setup=await this.getNetworkSetup(),report=await this.buildWeekendGlobalReport();let sent=null;if(send){const chatId=setup.settings.weekend.chatId;if(!chatId)throw new Error('WEEKEND_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,chatId)}return{report,sent}}
+  async tick({now=new Date(),send=true}={}){
+    const setup=await this.getNetworkSetup(),tz=setup.settings.timezone,p=localParts(now,tz),cur=p.hour*60+p.minute,results=[];
+    const w=setup.settings.weekend;
+    if((w.days||['Sat','Sun']).includes(p.weekday)){
+      if(cur<9*60||cur>=24*60)return{at:now.toISOString(),mode:'weekend',results:[{skipped:true,reason:'outside_weekend_hours'}]};
+      const cp=await this.store.getRemoteCheckpoint('network_weekend_last'),freq=Number(w.frequencyMinutes||120);
+      if(cp?.at&&now-new Date(cp.at)<freq*60000)return{at:now.toISOString(),mode:'weekend',results:[{skipped:true,reason:'frequency_not_due'}]};
+      const report=await this.buildWeekendGlobalReport({now}),sent=send&&w.chatId?await this.telegram.send(report.text,w.chatId):null;await this.store.saveRemoteCheckpoint('network_weekend_last',{at:now.toISOString(),reportId:report.id});return{at:now.toISOString(),mode:'weekend',results:[{report,sent}]};
+    }
+    const wd=setup.settings.weekday;if(!(wd.days||[]).includes(p.weekday)||cur<mins(wd.startTime)||cur>=mins(wd.endTime)|| (cur>=mins(wd.pauseStart)&&cur<mins(wd.pauseEnd)))return{at:now.toISOString(),mode:'weekday',results:[{skipped:true,reason:'outside_schedule_or_pause'}]};
+    await this.verifyPending();
+    for(const cfg of setup.sellerGroups.filter(x=>x.enabled!==false)){try{results.push({sellerId:cfg.sellerId,...await this.runSupervisor(cfg.id,{now,send})})}catch(e){results.push({sellerId:cfg.sellerId,error:e.message})}}
+    const gcp=await this.store.getRemoteCheckpoint('network_general_last'),gf=Number(wd.generalFrequencyMinutes||60);
+    if(!gcp?.at||now-new Date(gcp.at)>=gf*60000){const report=await this.buildGeneralSummary({now}),sent=send&&wd.generalChatId?await this.telegram.send(report.text,wd.generalChatId):null;await this.store.saveRemoteCheckpoint('network_general_last',{at:now.toISOString(),reportId:report.id});results.push({general:true,report,sent})}
+    return{at:now.toISOString(),mode:'weekday',results};
+  }
   async sellerCompliance(seller){const rows=await this.store.listSupervisionActionsForSeller(seller,500),verified=rows.filter(x=>x.status==='VERIFIED').length,failed=rows.filter(x=>x.status==='FAILED').length,total=verified+failed,byType={};for(const r of rows)byType[r.actionType]=(byType[r.actionType]||0)+1;return{seller,total,verified,failed,pending:rows.filter(x=>['PENDING','WAITING_FOR_ACTION'].includes(x.status)).length,compliancePct:total?Math.round(verified/total*100):null,byType}}
 }
 module.exports={RemoteSupervisorService,ACTION_TYPES,QUALITATIVE_TYPES,DEFAULT_RUBRICS,normalizeSupervisorConfig,withinSchedule,scheduleMode,signalRank};

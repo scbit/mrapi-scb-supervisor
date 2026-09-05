@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - CRM seller directory + searchable multi-supervisor channels",
+  "description": "SUPERVISOR SCB V3 - seller Telegram groups + general summary + weekend guard",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
