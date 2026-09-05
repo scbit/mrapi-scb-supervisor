@@ -90,19 +90,19 @@ class RemoteSupervisorService{
   }
 
   defaultNetworkSettings(){
-    return{timezone:'America/Argentina/Buenos_Aires',
+    return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:true,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:3},
       weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:30,generalFrequencyMinutes:60,generalChatId:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
       weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
     };
   }
   async getNetworkSetup(){
-    const defaults=this.defaultNetworkSettings(),saved=await this.store.getSupervisionSettings()||{},settings={...defaults,...saved,weekday:{...defaults.weekday,...(saved.weekday||{})},weekend:{...defaults.weekend,...(saved.weekend||{})}};
+    const defaults=this.defaultNetworkSettings(),saved=await this.store.getSupervisionSettings()||{},settings={...defaults,...saved,coaching:{...defaults.coaching,...(saved.coaching||{})},weekday:{...defaults.weekday,...(saved.weekday||{})},weekend:{...defaults.weekend,...(saved.weekend||{})}};
     const supervisors=(await this.listSupervisors()).filter(x=>x.mode==='SELLER_GROUP');
     return{settings,sellers:await this.listSellerOptions(),sellerGroups:supervisors};
   }
   async saveNetworkSetup(input={}){
     const base=this.defaultNetworkSettings(),old=await this.store.getSupervisionSettings()||{},raw=input.settings||{};
-    const settings={...base,...old,...raw,weekday:{...base.weekday,...(old.weekday||{}),...(raw.weekday||{})},weekend:{...base.weekend,...(old.weekend||{}),...(raw.weekend||{})}};
+    const settings={...base,...old,...raw,coaching:{...base.coaching,...(old.coaching||{}),...(raw.coaching||{})},weekday:{...base.weekday,...(old.weekday||{}),...(raw.weekday||{})},weekend:{...base.weekend,...(old.weekend||{}),...(raw.weekend||{})}};
     await this.store.saveSupervisionSettings(settings);
     const results=[];
     for(const row of input.sellerGroups||[]){
@@ -153,8 +153,73 @@ class RemoteSupervisorService{
     const type=String(input.actionType||'').toUpperCase();if(!ACTION_TYPES.includes(type))throw new Error('REMOTE_ACTION_TYPE_INVALID');
     const seller=String(input.seller||input.sellerName||'').trim(),conversationId=String(input.conversationId||'').trim();if(!seller||!conversationId)throw new Error('REMOTE_ACTION_SELLER_AND_CONVERSATION_REQUIRED');
     const duplicate=await this.store.findOpenSupervisionAction({seller,conversationId,actionType:type});if(duplicate)return{...duplicate,duplicate:true};
-    const createdAt=new Date().toISOString();const action={id:id('action'),supervisorId:String(input.supervisorId||'automatic'),seller,sellerKey:normSeller(seller),conversationId,actionType:type,reason:String(input.reason||'').trim(),expectedBehavior:String(input.expectedBehavior||'').trim(),rubric:actionRubric(type,input.rubric),verificationMode:QUALITATIVE_TYPES.has(type)?'AI':'DETERMINISTIC',status:'WAITING_FOR_ACTION',createdAt,updatedAt:createdAt,attempts:0,recurrenceCount:await this.store.countActionRecurrence({seller,actionType:type})};await this.store.saveSupervisionAction(action.id,action);return action;
+    const createdAt=new Date().toISOString();const action={id:id('action'),supervisorId:String(input.supervisorId||'automatic'),seller,sellerKey:normSeller(seller),conversationId,actionType:type,reason:String(input.reason||'').trim(),expectedBehavior:String(input.expectedBehavior||'').trim(),rubric:actionRubric(type,input.rubric),verificationMode:QUALITATIVE_TYPES.has(type)?'AI':'DETERMINISTIC',status:'WAITING_FOR_ACTION',severity:String(input.severity||'MEDIUM').toUpperCase(),sourceDetection:String(input.sourceDetection||'MANUAL').trim(),sourceEvidence:input.sourceEvidence||null,createdAt,updatedAt:createdAt,attempts:0,recurrenceCount:await this.store.countActionRecurrence({seller,actionType:type})};await this.store.saveSupervisionAction(action.id,action);return action;
   }
+
+  async detectAutomaticActionsForSupervisor(cfg,{now=new Date()}={}){
+    const setup=await this.getNetworkSetup(),coach=setup.settings.coaching||{};
+    if(coach.enabled===false)return{created:[],reviewed:0,skipped:'disabled'};
+    const sellerKeys=new Set((cfg.sellers||[]).map(normSeller));
+    const states=(await this.store.listConversationStates(5000))
+      .filter(c=>sellerKeys.has(normSeller(c.metrics?.owner||c.snapshot?.owner)))
+      .sort((a,b)=>String(b.metrics?.lastMessageAt||b.updatedAt||'').localeCompare(String(a.metrics?.lastMessageAt||a.updatedAt||'')));
+    const prior=await this.store.listSupervisionActionsForSellers([...sellerKeys],500);
+    const openByConversation=new Set(prior.filter(a=>['PENDING','WAITING_FOR_ACTION'].includes(a.status)).map(a=>String(a.conversationId)));
+    const created=[],waitingThreshold=Number(coach.responseWaitingMinutes||15),lookbackMinutes=Math.max(Number(cfg.frequencyMinutes||30)*2,60),cutoff=now.getTime()-lookbackMinutes*60000;
+
+    for(const c of states){
+      if(openByConversation.has(String(c.id)))continue;
+      const waiting=c.currentWaiting===true||c.metrics?.waitingForHuman===true;
+      const waitingMinutes=Number(c.metrics?.waitingMinutes||0);
+      if(waiting&&waitingMinutes>=waitingThreshold){
+        const seller=c.metrics?.owner||c.snapshot?.owner||cfg.sellerLabel||cfg.name;
+        const a=await this.createAction({
+          supervisorId:cfg.id,seller,conversationId:c.id,actionType:'RESPOND',
+          severity:waitingMinutes>=30?'HIGH':'MEDIUM',sourceDetection:'WAITING_CLIENT',
+          sourceEvidence:{waitingMinutes,waitingSince:c.metrics?.waitingSince||null,customerText:c.metrics?.waitingCustomerText||null},
+          reason:`Cliente esperando respuesta hace ${waitingMinutes} min.`,
+          expectedBehavior:'Responder al cliente con una respuesta humana útil y concreta, sin dejarlo esperando.'
+        });
+        if(!a.duplicate){created.push(a);openByConversation.add(String(c.id))}
+      }
+    }
+
+    let reviewed=0;
+    const maxAi=Math.max(0,Number(coach.maxAiReviewsPerSellerTick||3));
+    if(!this.ai?.analyzeSupervisionNeed||maxAi===0)return{created,reviewed};
+    for(const c of states){
+      if(reviewed>=maxAi)break;
+      if(openByConversation.has(String(c.id)))continue;
+      const lastActivity=new Date(c.metrics?.lastSellerActivityAt||0).getTime();
+      if(!Number.isFinite(lastActivity)||lastActivity<cutoff)continue;
+      const checkpointId=`coach_review__${Buffer.from(String(c.id)).toString('base64url').slice(0,160)}`;
+      const cp=await this.store.getRemoteCheckpoint(checkpointId);
+      if(cp?.lastSellerActivityAt&&String(cp.lastSellerActivityAt)===String(c.metrics?.lastSellerActivityAt))continue;
+
+      const conversation=await this.inbox.getConversation(c.id);if(!conversation)continue;
+      const messages=await this.inbox.getMessages(c.id,120);
+      const humans=messages.filter(m=>m.actor==='human');if(!humans.length)continue;
+      const latestHuman=humans.at(-1);
+      const hasClientBefore=messages.some(m=>m.actor==='client'&&new Date(m.timestamp||0)<=new Date(latestHuman.timestamp||0));
+      if(!hasClientBefore){await this.store.saveRemoteCheckpoint(checkpointId,{lastSellerActivityAt:c.metrics?.lastSellerActivityAt,reviewedAt:now.toISOString(),result:'no_client_context'});continue}
+
+      let evaluation=null,error=null;
+      try{evaluation=await this.ai.analyzeSupervisionNeed({conversation,messages,seller:c.metrics?.owner||cfg.sellerLabel||cfg.name});reviewed++}
+      catch(e){error=e.message}
+      await this.store.saveRemoteCheckpoint(checkpointId,{lastSellerActivityAt:c.metrics?.lastSellerActivityAt,reviewedAt:now.toISOString(),result:evaluation||null,error});
+      if(!evaluation?.requiresCorrection||!evaluation.actionType)continue;
+      const seller=c.metrics?.owner||cfg.sellerLabel||cfg.name;
+      const a=await this.createAction({
+        supervisorId:cfg.id,seller,conversationId:c.id,actionType:evaluation.actionType,severity:evaluation.severity,
+        sourceDetection:'AI_RESPONSE_QUALITY',
+        sourceEvidence:{messageId:latestHuman.id||null,timestamp:latestHuman.timestamp||null,text:String(latestHuman.text||'').slice(0,1000),aiEvidence:evaluation.evidence||null},
+        reason:evaluation.reason,expectedBehavior:evaluation.expectedBehavior,rubric:evaluation.rubric
+      });
+      if(!a.duplicate){created.push(a);openByConversation.add(String(c.id))}
+    }
+    return{created,reviewed};
+  }
+
   async verifyAction(action){
     if(!['PENDING','WAITING_FOR_ACTION'].includes(action.status))return action;
     const messages=await this.inbox.getMessages(action.conversationId,200);const after=(messages||[]).filter(m=>m.actor==='human'&&new Date(m.timestamp||0)>new Date(action.createdAt));if(!after.length)return action;
@@ -169,13 +234,14 @@ class RemoteSupervisorService{
     const waiting=mine.filter(c=>c.currentWaiting===true||c.metrics?.currentWaiting===true),sellers=new Map(),ensure=s=>{const k=normSeller(s||'Sin asignar');if(!sellers.has(k))sellers.set(k,{name:s||'Sin asignar',waiting:0,active:0,lastActivityAt:null});return sellers.get(k)};
     for(const c of mine){const seller=c.metrics?.owner||c.snapshot?.owner||'Sin asignar',s=ensure(seller);if(c.currentWaiting===true||c.metrics?.currentWaiting===true)s.waiting++;const iso=c.metrics?.lastSellerActivityAt;if(iso&&(!s.lastActivityAt||iso>s.lastActivityAt))s.lastActivityAt=iso}
     const cutoff=now.getTime()-cfg.lookbackMinutes*60000;for(const s of sellers.values())s.active=s.lastActivityAt&&new Date(s.lastActivityAt).getTime()>=cutoff?1:0;
-    const actions=await this.store.listSupervisionActionsForSellers([...wanted],200),open=actions.filter(a=>['PENDING','WAITING_FOR_ACTION','FAILED'].includes(a.status)),recent=actions.filter(a=>a.status==='VERIFIED'&&a.verifiedAt&&new Date(a.verifiedAt).getTime()>=cutoff);
+    const actions=await this.store.listSupervisionActionsForSellers([...wanted],300),open=actions.filter(a=>['PENDING','WAITING_FOR_ACTION'].includes(a.status)),failedRecent=actions.filter(a=>a.status==='FAILED'&&a.verifiedAt&&new Date(a.verifiedAt).getTime()>=cutoff),recent=actions.filter(a=>a.status==='VERIFIED'&&a.verifiedAt&&new Date(a.verifiedAt).getTime()>=cutoff);
     const lines=[`SUPERVISOR REMOTO — ${cfg.name}`,`Horario ${cfg.startTime}-${cfg.endTime} · frecuencia ${cfg.frequencyMinutes} min`,'','👥 VENDEDORES'];
     for(const s of [...sellers.values()].sort((a,b)=>a.name.localeCompare(b.name)))lines.push(`${s.active?'🟢':'⚪'} ${s.name} — esperando ${s.waiting}`);
     lines.push('','🚨 CLIENTES ESPERANDO');if(!waiting.length)lines.push('Sin clientes esperando.');else waiting.slice(0,12).forEach(c=>lines.push(`• ${c.snapshot?.contactName||c.id} — ${c.metrics?.owner||c.snapshot?.owner||'Sin asignar'} — https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`));
-    lines.push('','🎯 CORRECCIONES');if(!open.length)lines.push('Sin correcciones pendientes.');else open.slice(0,12).forEach(a=>lines.push(`${a.status==='FAILED'?'❌':'🟠'} ${a.seller} — ${a.actionType} — ${a.status}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`));
-    if(recent.length){lines.push('','✅ CORRECCIONES APLICADAS');recent.slice(0,10).forEach(a=>lines.push(`• ${a.seller} — ${a.actionType}`))}
-    const report={id:id('remote_report'),supervisorId:cfg.id,mode:'weekday',generatedAt:now.toISOString(),configSnapshot:cfg,summary:{sellerCount:sellers.size,waiting:waiting.length,pendingCorrections:open.length,verifiedRecent:recent.length},text:lines.join('\n')};await this.store.saveRemoteReport(report.id,report);return report;
+    lines.push('','🎯 CORRECCIONES PENDIENTES');if(!open.length)lines.push('Sin correcciones pendientes.');else open.slice(0,12).forEach(a=>lines.push(`🟠 ${a.seller} — ${a.actionType}${a.severity?` · ${a.severity}`:''}\nProblema: ${a.reason||'-'}\nEsperado: ${a.expectedBehavior||'-'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`));
+    if(failedRecent.length){lines.push('','❌ CORRECCIONES NO APLICADAS');failedRecent.slice(0,10).forEach(a=>lines.push(`• ${a.seller} — ${a.actionType}\n${a.verificationResult?.reason||'La siguiente acción no cumplió la corrección.'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`))}
+    if(recent.length){lines.push('','✅ CORRECCIONES APLICADAS');recent.slice(0,10).forEach(a=>lines.push(`• ${a.seller} — ${a.actionType}${a.verificationResult?.reason?` — ${a.verificationResult.reason}`:''}`))}
+    const report={id:id('remote_report'),supervisorId:cfg.id,mode:'weekday',generatedAt:now.toISOString(),configSnapshot:cfg,summary:{sellerCount:sellers.size,waiting:waiting.length,pendingCorrections:open.length,failedRecent:failedRecent.length,verifiedRecent:recent.length},text:lines.join('\n')};await this.store.saveRemoteReport(report.id,report);return report;
   }
   async buildWeekendGuardReport(cfg,{now=new Date()}={}){
     const freq=cfg.weekend?.frequencyMinutes||120,from=new Date(now.getTime()-freq*60000),convs=await this.inbox.listConversationsInRange({from,to:now,limit:300}),candidates=[];
@@ -204,11 +270,11 @@ class RemoteSupervisorService{
       await this.store.saveRemoteReport(report.id,report);let sent=null;if(send)sent=await this.telegram.send(report.text);return{skipped:false,mode:'weekend_guard',report,sent};
     }
     const last=await this.store.getRemoteCheckpoint(`last_send_${cfg.id}`);if(!force&&last?.at&&now.getTime()-new Date(last.at).getTime()<cfg.frequencyMinutes*60000)return{skipped:true,reason:'frequency_not_due'};
-    const verified=await this.verifyPending(),report=await this.buildSupervisorReport(cfg.id,{now});let sent=null;if(send){sent=await this.telegram.send(report.text,cfg.telegramChatId||undefined);await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id})}return{skipped:false,mode:'weekday',verified,report,sent};
+    const detected=await this.detectAutomaticActionsForSupervisor(cfg,{now}),verified=await this.verifyPending(),report=await this.buildSupervisorReport(cfg.id,{now});report.summary.autoDetected=detected.created.length;report.summary.aiReviewed=detected.reviewed;let sent=null;if(send){sent=await this.telegram.send(report.text,cfg.telegramChatId||undefined);await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id})}return{skipped:false,mode:'weekday',detected,verified,report,sent};
   }
   async testSellerGroup(sellerId,{send=false}={}){
     const id='seller_group__'+Buffer.from(String(sellerId)).toString('base64url').slice(0,160),cfg=await this.store.getRemoteSupervisor(id);if(!cfg)throw new Error('SELLER_GROUP_NOT_CONFIGURED');
-    const report=await this.buildSupervisorReport(id,{now:new Date()});let sent=null;if(send){if(!cfg.telegramChatId)throw new Error('SELLER_GROUP_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,cfg.telegramChatId)}return{report,sent};
+    const now=new Date(),detected=await this.detectAutomaticActionsForSupervisor(cfg,{now}),verified=await this.verifyPending(),report=await this.buildSupervisorReport(id,{now});report.summary.autoDetected=detected.created.length;report.summary.aiReviewed=detected.reviewed;let sent=null;if(send){if(!cfg.telegramChatId)throw new Error('SELLER_GROUP_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,cfg.telegramChatId)}return{detected,verified,report,sent};
   }
   async testGeneral({send=false,chatIdOverride=null}={}){const setup=await this.getNetworkSetup(),report=await this.buildGeneralSummary();let sent=null;if(send){const chatId=String(chatIdOverride||setup.settings.weekday.generalChatId||'').trim();if(!chatId)throw new Error('GENERAL_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,chatId)}return{report,sent}}
   async testWeekend({send=false,chatIdOverride=null}={}){const setup=await this.getNetworkSetup(),report=await this.buildWeekendGlobalReport();let sent=null;if(send){const chatId=String(chatIdOverride||setup.settings.weekend.chatId||'').trim();if(!chatId)throw new Error('WEEKEND_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,chatId)}return{report,sent}}

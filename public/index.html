@@ -7,7 +7,7 @@
 </style>
 </head>
 <body><div class="wrap">
-<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.9.9</p></div><div class="badge">FUENTES READ ONLY</div></header>
+<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.10.0</p></div><div class="badge">FUENTES READ ONLY</div></header>
 <div class="grid">
 <section class="card span12"><h2>Acceso</h2><div class="row"><input id="token" type="password" placeholder="Pegá SUPERVISOR_API_TOKEN acá"><button onclick="saveToken()">Guardar token</button><button onclick="clearToken()">Borrar</button></div><div class="hint">El token queda solamente en este navegador y se usa como header del Supervisor.</div></section>
 
@@ -90,6 +90,24 @@
       <option value="30" selected>Revisar vendedores cada 30 min</option>
       <option value="60">Revisar vendedores cada 1 hora</option>
     </select>
+    <div class="divider" style="margin:12px 0"></div>
+    <div class="fieldTitle">Coaching automático</div>
+    <label class="dayToggle" style="display:inline-flex"><input id="coachingEnabled" type="checkbox" checked> Detectar y verificar correcciones</label>
+    <div class="row" style="margin-top:10px">
+      <select id="coachingWaiting">
+        <option value="10">Corregir sin respuesta desde 10 min</option>
+        <option value="15" selected>Corregir sin respuesta desde 15 min</option>
+        <option value="20">Corregir sin respuesta desde 20 min</option>
+        <option value="30">Corregir sin respuesta desde 30 min</option>
+      </select>
+      <select id="coachingAiMax">
+        <option value="1">IA: máx. 1 chat/vendedor por revisión</option>
+        <option value="2">IA: máx. 2 chats/vendedor por revisión</option>
+        <option value="3" selected>IA: máx. 3 chats/vendedor por revisión</option>
+        <option value="5">IA: máx. 5 chats/vendedor por revisión</option>
+      </select>
+    </div>
+    <div class="hint">Primero usa datos duros. La IA solo revisa respuestas humanas nuevas y nunca vuelve a analizar el mismo mensaje.</div>
   </div>
 
   <div class="span6 fieldCard">
@@ -202,17 +220,17 @@ function renderSellerRows(){
   const q=(sellerSearch.value||'').trim().toLowerCase(),sellers=window.__crmSellers||[],groups=window.__sellerGroups||[];
   sellerGroupRows.innerHTML=sellers.filter(s=>!q||`${s.label} ${s.email||''} ${s.id}`.toLowerCase().includes(q)).map(s=>{
     const cfg=groups.find(g=>String(g.sellerId||g.sellers?.[0]||'')===String(s.id))||{};
-    return `<tr data-seller="${esc(s.id)}"><td><div class="sellerName">${esc(s.label)}</div><div class="sellerMeta">${esc(s.email||s.id)} · ${esc(s.source||'CRM/HUB')}</div></td><td><select class="sellerChat">${chatOptions(cfg.telegramChatId||'')}</select></td><td><input class="sellerChatManual" placeholder="-100..." value="${esc(cfg.telegramChatId||'')}"></td><td><input class="sellerEnabled" type="checkbox"${cfg.enabled===false?'':' checked'} style="min-width:auto"></td><td><button onclick="testSellerGroup('${esc(String(s.id).replace(/'/g,"\\'"))}',this)">Probar</button></td></tr>`
+    return `<tr data-seller="${esc(s.id)}"><td><div class="sellerName">${esc(s.label)}</div><div class="sellerMeta">${esc(s.email||s.id)} · ${esc(s.source||'CRM/HUB')}</div></td><td><select class="sellerChat">${chatOptions(cfg.telegramChatId||'')}</select></td><td><input class="sellerChatManual" placeholder="-100..." value="${esc(cfg.telegramChatId||'')}"></td><td><input class="sellerEnabled" type="checkbox"${cfg.enabled===false?'':' checked'} style="min-width:auto"></td><td><button onclick="testSellerGroup('${esc(String(s.id).replace(/'/g,"\\'"))}',this)">Analizar / Probar</button></td></tr>`
   }).join('')||'<tr><td colspan="5">No hay vendedores para mostrar.</td></tr>';
 }
 async function detectTelegramChats(){
   const d=await request('/api/integrations/telegram/chats',{headers:headers()});window.__tgChats=d.chats||[];
   telegramChatsStatus.textContent=window.__tgChats.length?`Grupos/chats detectados: ${window.__tgChats.map(x=>x.title).join(', ')}`:'No se detectaron grupos todavía. Mandá un comando al bot dentro del grupo y probá de nuevo.';
-  renderGlobalChatSelects();generalChatManual.value=wd.generalChatId||'';weekendChatManual.value=we.chatId||'';renderSellerRows();
+  coachingEnabled.checked=co.enabled!==false;coachingWaiting.value=String(co.responseWaitingMinutes||15);coachingAiMax.value=String(co.maxAiReviewsPerSellerTick||3);renderGlobalChatSelects();generalChatManual.value=wd.generalChatId||'';weekendChatManual.value=we.chatId||'';renderSellerRows();
 }
 async function loadSupervisionNetwork(){
   const d=await request('/api/supervisor/network/setup',{headers:headers()});window.__crmSellers=d.sellers||[];window.__sellerGroups=d.sellerGroups||[];window.__networkSettings=d.settings||{};
-  const wd=d.settings?.weekday||{},we=d.settings?.weekend||{};
+  const wd=d.settings?.weekday||{},we=d.settings?.weekend||{},co=d.settings?.coaching||{};
   setCheckedValues('.weekdayCb',wd.days||['Mon','Tue','Wed','Thu','Fri']);wdStart.value=wd.startTime||'09:00';wdEnd.value=wd.endTime||'17:00';wdPauseStart.value=wd.pauseStart||'12:00';wdPauseEnd.value=wd.pauseEnd||'13:00';sellerFrequency.value=String(wd.sellerFrequencyMinutes||30);generalFrequency.value=String(wd.generalFrequencyMinutes||60);setCheckedValues('.generalDayCb',wd.generalDays||wd.days||['Mon','Tue','Wed','Thu','Fri']);generalStart.value=wd.generalStartTime||wd.startTime||'09:00';generalEnd.value=wd.generalEndTime||wd.endTime||'17:00';
   setCheckedValues('.weekendCb',we.days||['Sat','Sun']);weekendStart.value=we.startTime||'09:00';weekendEnd.value=we.endTime||'24:00';weekendFrequency.value=String(we.frequencyMinutes||120);weekendSignal.value=we.minimumSignal||'MUY_INTERESANTE';
   renderGlobalChatSelects();renderSellerRows();
@@ -221,7 +239,7 @@ function sellerRowsPayload(){
   return Array.from(document.querySelectorAll('#sellerGroupRows tr[data-seller]')).map(tr=>{const id=tr.dataset.seller,s=(window.__crmSellers||[]).find(x=>String(x.id)===String(id));return{sellerId:id,sellerLabel:s?.label||id,telegramChatId:(tr.querySelector('.sellerChatManual')?.value||tr.querySelector('.sellerChat')?.value||'').trim()||null,enabled:tr.querySelector('.sellerEnabled')?.checked!==false}});
 }
 async function saveSupervisionNetwork(){
-  const body={settings:{timezone:'America/Argentina/Buenos_Aires',weekday:{days:checkedValues('.weekdayCb'),startTime:wdStart.value||'09:00',endTime:wdEnd.value||'17:00',pauseStart:wdPauseStart.value||'12:00',pauseEnd:wdPauseEnd.value||'13:00',sellerFrequencyMinutes:Number(sellerFrequency.value||30),generalFrequencyMinutes:Number(generalFrequency.value||60),generalChatId:(generalChatManual.value||generalChat.value||'').trim()||null,generalDays:checkedValues('.generalDayCb'),generalStartTime:generalStart.value||'09:00',generalEndTime:generalEnd.value||'17:00'},weekend:{days:checkedValues('.weekendCb'),startTime:weekendStart.value||'09:00',endTime:weekendEnd.value||'24:00',frequencyMinutes:Number(weekendFrequency.value||120),chatId:(weekendChatManual.value||weekendChat.value||'').trim()||null,minimumSignal:weekendSignal.value||'MUY_INTERESANTE',sendStats:true,alertImportant:true}},sellerGroups:sellerRowsPayload()};
+  const body={settings:{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:coachingEnabled.checked,responseWaitingMinutes:Number(coachingWaiting.value||15),maxAiReviewsPerSellerTick:Number(coachingAiMax.value||3)},weekday:{days:checkedValues('.weekdayCb'),startTime:wdStart.value||'09:00',endTime:wdEnd.value||'17:00',pauseStart:wdPauseStart.value||'12:00',pauseEnd:wdPauseEnd.value||'13:00',sellerFrequencyMinutes:Number(sellerFrequency.value||30),generalFrequencyMinutes:Number(generalFrequency.value||60),generalChatId:(generalChatManual.value||generalChat.value||'').trim()||null,generalDays:checkedValues('.generalDayCb'),generalStartTime:generalStart.value||'09:00',generalEndTime:generalEnd.value||'17:00'},weekend:{days:checkedValues('.weekendCb'),startTime:weekendStart.value||'09:00',endTime:weekendEnd.value||'24:00',frequencyMinutes:Number(weekendFrequency.value||120),chatId:(weekendChatManual.value||weekendChat.value||'').trim()||null,minimumSignal:weekendSignal.value||'MUY_INTERESANTE',sendStats:true,alertImportant:true}},sellerGroups:sellerRowsPayload()};
   await request('/api/supervisor/network/setup',{method:'POST',headers:headers(true),body:JSON.stringify(body)});alert('Red de supervisión guardada.');await loadSupervisionNetwork();
 }
 async function testSellerGroup(sellerId,btn){const send=confirm('¿Enviar la prueba al grupo Telegram configurado para este vendedor?\\nCancelar = solo generar/mostrar.');const d=await request('/api/supervisor/network/test-seller',{method:'POST',headers:headers(true),body:JSON.stringify({sellerId,send})});if(d.result?.report)setReport(d.result.report);if(send&&d.result?.sent)alert('Prueba enviada al grupo del vendedor.')}

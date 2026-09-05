@@ -87,6 +87,60 @@ Devolvé SOLO JSON válido con esta estructura:
     const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);const data=JSON.parse(raw);const outputText=data.output_text||data.output?.flatMap(o=>o.content||[]).find(c=>c.type==='output_text')?.text||'';if(!outputText)throw new Error('OpenAI no devolvió texto.');const out=JSON.parse(outputText.replace(/^```json/i,'').replace(/^```/i,'').replace(/```$/i,'').trim());return{verified:out.verified===true,score:Number(out.score||0),reason:String(out.reason||''),criteria:Array.isArray(out.criteria)?out.criteria:[],evidenceMessageId:message?.id||null,evidenceAt:message?.timestamp||null};
   }
 
+  async analyzeSupervisionNeed({conversation,messages=[],seller=null}){
+    if(!this.apiKey)throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
+    const transcript=this.buildTranscript(messages).slice(-14000);
+    const prompt=`Sos Supervisor Comercial de SCB. Analizá la ÚLTIMA intervención del VENDEDOR HUMANO y decidí si hace falta una corrección concreta para su próxima acción.
+
+IMPORTANTE:
+- No busques perfección. Solo crear corrección si hay un problema comercial claro y accionable.
+- RESPONDER y HACER SEGUIMIENTO se controlan con datos duros; NO los elijas acá.
+- No inventes calidad oficial del lead.
+- Si la respuesta fue adecuada, requiresCorrection=false.
+- Si falta contexto porque la conversación recién empieza, evitá corregir salvo que el vendedor esté cerrando/despachando prematuramente.
+
+Tipos permitidos:
+DISCOVERY = faltó indagar negocio, producto, volumen, origen, proveedor, recurrencia o contexto.
+ADVISE = faltó asesorar o recomendar una alternativa concreta.
+EXPLAIN_OPTIONS = faltó explicar opciones relevantes o diferencias.
+DO_NOT_DISMISS = está despachando/cerrando al cliente demasiado pronto.
+IMPROVE_RESPONSE = respuesta confusa, pobre, incompleta o poco profesional.
+TRY_TO_CLOSE = oportunidad avanzada sin siguiente paso o intento razonable de avance.
+
+Vendedor: ${seller||conversation?.owner||'sin dato'}
+Cliente: ${conversation?.contactName||'sin nombre'}
+Origen: ${conversation?.sourceChannel||''}
+Stage: ${conversation?.stage||''}
+
+Conversación reciente:
+${transcript}
+
+Devolvé SOLO JSON:
+{
+  "requiresCorrection": false,
+  "actionType": "DISCOVERY",
+  "severity": "LOW|MEDIUM|HIGH",
+  "reason": "",
+  "expectedBehavior": "",
+  "rubric": [],
+  "evidence": ""
+}`;
+    const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido.'},{role:'user',content:prompt}]})});
+    const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);
+    const data=JSON.parse(raw);const outputText=data.output_text||data.output?.flatMap(o=>o.content||[]).find(c=>c.type==='output_text')?.text||'';if(!outputText)throw new Error('OpenAI no devolvió texto.');
+    const out=JSON.parse(outputText.replace(/^```json/i,'').replace(/^```/i,'').replace(/```$/i,'').trim());
+    const allowed=new Set(['DISCOVERY','ADVISE','EXPLAIN_OPTIONS','DO_NOT_DISMISS','IMPROVE_RESPONSE','TRY_TO_CLOSE']);
+    return{
+      requiresCorrection:out.requiresCorrection===true&&allowed.has(String(out.actionType||'').toUpperCase()),
+      actionType:allowed.has(String(out.actionType||'').toUpperCase())?String(out.actionType).toUpperCase():null,
+      severity:['LOW','MEDIUM','HIGH'].includes(String(out.severity||'').toUpperCase())?String(out.severity).toUpperCase():'MEDIUM',
+      reason:String(out.reason||'').trim(),
+      expectedBehavior:String(out.expectedBehavior||'').trim(),
+      rubric:Array.isArray(out.rubric)?out.rubric.map(x=>String(x).trim()).filter(Boolean).slice(0,8):[],
+      evidence:String(out.evidence||'').trim()
+    };
+  }
+
   async analyzeWeekendOpportunity({conversation,messages=[]}){
     if(!this.apiKey)throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
     const transcript=this.buildTranscript(messages).slice(0,12000);
