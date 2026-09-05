@@ -311,7 +311,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     return{skipped:false,mode:'weekday_live_daily',deliveryMode:liveCfg.deliveryMode||'DRY_RUN',analysis:{date:analysis.date,changedCases:analysis.changedCases.length,newObservations:analysis.observations.created.length+analysis.observations.overdue.created.length},report,sent};
   }
   async testSellerGroup(sellerId,{send=false}={}){
-    const id='seller_group__'+Buffer.from(String(sellerId)).toString('base64url').slice(0,160),cfg=await this.store.getRemoteSupervisor(id);if(!cfg)throw new Error('SELLER_GROUP_NOT_CONFIGURED');
+    const supervisorDocId='seller_group__'+Buffer.from(String(sellerId)).toString('base64url').slice(0,160),cfg=await this.store.getRemoteSupervisor(supervisorDocId);if(!cfg)throw new Error('SELLER_GROUP_NOT_CONFIGURED');
     const now=new Date(),setup=await this.getNetworkSetup(),liveCfg=setup.settings.liveDaily||{enabled:true,deliveryMode:'DRY_RUN'},activeDeals=await this.store.listActiveDeals(20000);
     const analysis=await this.liveDaily.analyzeSellerGroup(cfg,{now,activeDeals}),built=this.liveDaily.buildTelegramReport(cfg,analysis,{now,deliveryMode:liveCfg.deliveryMode||'DRY_RUN'});
     const report={id:id('live_daily_report'),supervisorId:cfg.id,date:analysis.date,mode:'weekday_live_daily',generatedAt:now.toISOString(),summary:built.summary,text:built.text};await this.store.saveLiveDailyReport(report.id,report);
