@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.9.7",
+  "version": "0.9.8",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - independent schedule for general Telegram group",
+  "description": "SUPERVISOR SCB V3 - Daily Gerencial send to General Telegram group",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
