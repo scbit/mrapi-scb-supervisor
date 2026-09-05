@@ -4,7 +4,7 @@ const fs=require('fs');
 
 test('0.9.8 UI exposes Daily send to General group',()=>{
   const html=fs.readFileSync('public/index.html','utf8');
-  assert.ok(html.includes('Enviar Diario al Grupo General'));
+  assert.ok(html.includes('Enviar Diario al grupo elegido'));
   assert.ok(html.includes('/api/supervisor/daily/send/general-group'));
 });
 

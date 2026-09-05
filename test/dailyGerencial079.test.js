@@ -49,6 +49,6 @@ test('daily report renderers separate Telegram text and Outlook HTML',()=>{
 
 test('0.7.9 UI exposes daily gerencial manual controls',()=>{
   const html=fs.readFileSync('public/index.html','utf8');
-  for(const s of ['Reporte Diario Gerencial V3','Generar Diario Gerencial','Ver Diario','Enviar Diario a Telegram','Enviar Diario por Email','Enviar Diario Telegram + Email'])assert.ok(html.includes(s),s);
-  for(const ep of ['/api/supervisor/daily/generate','/api/supervisor/daily/send/telegram','/api/supervisor/daily/send/email','/api/supervisor/daily/send/all'])assert.ok(html.includes(ep),ep);
+  for(const s of ['Reporte Diario Gerencial V3','Ejecutar supervisor diario','Ver Diario','Enviar Diario a Telegram','Enviar Diario por Email','Enviar Diario Telegram + Email'])assert.ok(html.includes(s),s);
+  for(const ep of ['/api/supervisor/daily/start','/api/supervisor/daily/process','/api/supervisor/daily/send/telegram','/api/supervisor/daily/send/email','/api/supervisor/daily/send/all'])assert.ok(html.includes(ep),ep);
 });
