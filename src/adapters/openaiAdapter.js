@@ -80,5 +80,12 @@ Devolvé SOLO JSON válido con esta estructura:
     const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);
     const data=JSON.parse(raw);const outputText=data.output_text||data.output?.flatMap(o=>o.content||[]).find(c=>c.type==='output_text')?.text||'';if(!outputText)throw new Error('OpenAI no devolvió texto.');return JSON.parse(outputText.replace(/^```json/i,'').replace(/^```/i,'').replace(/```$/i,'').trim());
   }
+  async verifyCorrection({action,message,conversation}){
+    if(!this.apiKey)throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
+    const prompt=`Sos verificador de cumplimiento comercial de SCB. Evaluá SOLO si la siguiente intervención del vendedor cumple la corrección solicitada. No evalúes la calidad general del chat.\n\nACCIÓN: ${action.actionType}\nMOTIVO: ${action.reason||''}\nCOMPORTAMIENTO ESPERADO: ${action.expectedBehavior||''}\nRÚBRICA:\n${(action.rubric||[]).map((x,i)=>`${i+1}. ${x}`).join('\n')}\n\nCLIENTE: ${conversation?.contactName||'sin nombre'}\nMENSAJE DEL VENDEDOR: ${String(message?.text||'')}\n\nDevolvé SOLO JSON válido: {"verified":true,"score":0,"reason":"","criteria":[{"criterion":"","met":true}],"evidenceMessageId":"${message?.id||''}","evidenceAt":"${message?.timestamp||''}"}`;
+    const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido.'},{role:'user',content:prompt}]})});
+    const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);const data=JSON.parse(raw);const outputText=data.output_text||data.output?.flatMap(o=>o.content||[]).find(c=>c.type==='output_text')?.text||'';if(!outputText)throw new Error('OpenAI no devolvió texto.');const out=JSON.parse(outputText.replace(/^```json/i,'').replace(/^```/i,'').replace(/```$/i,'').trim());return{verified:out.verified===true,score:Number(out.score||0),reason:String(out.reason||''),criteria:Array.isArray(out.criteria)?out.criteria:[],evidenceMessageId:message?.id||null,evidenceAt:message?.timestamp||null};
+  }
+
 }
 module.exports={OpenAIAdapter};

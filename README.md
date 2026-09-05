@@ -63,3 +63,16 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Cruza `leadQuality=EXCELENTE` (dato duro CRM) con la gestión diaria del Supervisor.
 - Agrega `Leads Excelentes mal aprovechados` y `Leads Excelentes bien trabajados`, ambos con link directo al HUB.
 - El cruce no modifica CRM/Bandeja/Hunter; todas las fuentes siguen en modo solo lectura.
+
+## v0.9.0 — Supervisor Remoto + ciclo de corrección
+
+- Configuración desde UI de supervisor remoto, vendedores, horario, pausa 12:00–13:00 y frecuencia.
+- Reporte filtrado por uno o varios vendedores.
+- Estado persistido solo en `supervisor-scb`.
+- `SupervisionAction` con tipos controlados y ciclo `WAITING_FOR_ACTION -> VERIFIED | FAILED`.
+- Verificación determinística para RESPOND/FOLLOW_UP y semántica por AI Provider para acciones cualitativas.
+- OpenAI implementa hoy el contrato `verifyCorrection`; la lógica de negocio no depende del proveedor y queda preparada para MRAPI AI Core / IA local en una fase posterior.
+- Evita duplicar una corrección abierta para mismo vendedor/conversación/tipo.
+- KPI de cumplimiento por vendedor y memoria de reincidencias por tipo.
+- Endpoint `POST /api/supervisor/remote/tick` para que un scheduler externo ejecute la frecuencia configurada. La infraestructura/scheduler NO se crea automáticamente en esta versión.
+- CRM (`bscrmscb`), Bandeja (`bsscb`) y Hunter (`scb-hunter-bd`) continúan estrictamente READ ONLY.
