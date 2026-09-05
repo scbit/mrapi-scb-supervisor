@@ -156,6 +156,24 @@ class RemoteSupervisorService{
     const createdAt=new Date().toISOString();const action={id:id('action'),supervisorId:String(input.supervisorId||'automatic'),seller,sellerKey:normSeller(seller),conversationId,actionType:type,reason:String(input.reason||'').trim(),expectedBehavior:String(input.expectedBehavior||'').trim(),rubric:actionRubric(type,input.rubric),verificationMode:QUALITATIVE_TYPES.has(type)?'AI':'DETERMINISTIC',status:'WAITING_FOR_ACTION',severity:String(input.severity||'MEDIUM').toUpperCase(),sourceDetection:String(input.sourceDetection||'MANUAL').trim(),sourceEvidence:input.sourceEvidence||null,createdAt,updatedAt:createdAt,attempts:0,recurrenceCount:await this.store.countActionRecurrence({seller,actionType:type})};await this.store.saveSupervisionAction(action.id,action);return action;
   }
 
+
+  coachingCutoff(cfg,now=new Date()){
+    const minutes=Math.max(Number(cfg.frequencyMinutes||30)*2,60);
+    return new Date(now.getTime()-minutes*60000);
+  }
+  stateRelevantForCoaching(state,cfg,now=new Date()){
+    const cutoff=this.coachingCutoff(cfg,now).getTime();
+    const candidates=[
+      state?.metrics?.waitingSince,
+      state?.metrics?.lastCustomerMessageAt,
+      state?.metrics?.lastMessageAt,
+      state?.snapshot?.lastCustomerMessageAt,
+      state?.snapshot?.lastMessageAt,
+      state?.updatedAt
+    ].filter(Boolean).map(x=>new Date(x).getTime()).filter(Number.isFinite);
+    return candidates.length?Math.max(...candidates)>=cutoff:false;
+  }
+
   async detectAutomaticActionsForSupervisor(cfg,{now=new Date()}={}){
     const setup=await this.getNetworkSetup(),coach=setup.settings.coaching||{};
     if(coach.enabled===false)return{created:[],reviewed:0,skipped:'disabled'};
@@ -171,7 +189,8 @@ class RemoteSupervisorService{
       if(openByConversation.has(String(c.id)))continue;
       const waiting=c.currentWaiting===true||c.metrics?.waitingForHuman===true;
       const waitingMinutes=Number(c.metrics?.waitingMinutes||0);
-      if(waiting&&waitingMinutes>=waitingThreshold){
+      const relevant=this.stateRelevantForCoaching(c,cfg,now);
+      if(waiting&&relevant&&waitingMinutes>=waitingThreshold){
         const seller=c.metrics?.owner||c.snapshot?.owner||cfg.sellerLabel||cfg.name;
         const a=await this.createAction({
           supervisorId:cfg.id,seller,conversationId:c.id,actionType:'RESPOND',
@@ -231,16 +250,18 @@ class RemoteSupervisorService{
   async verifyPending({limit=100}={}){const rows=await this.store.listOpenSupervisionActions(limit),out=[];for(const a of rows){try{out.push(await this.verifyAction(a))}catch(e){out.push({...a,verificationError:e.message})}}return out}
   async buildSupervisorReport(supervisorId,{now=new Date()}={}){
     const cfg=await this.store.getRemoteSupervisor(supervisorId);if(!cfg)throw new Error('REMOTE_SUPERVISOR_NOT_FOUND');const wanted=new Set((cfg.sellers||[]).map(normSeller)),convs=await this.store.listConversationStates(5000),mine=convs.filter(c=>!wanted.size||wanted.has(normSeller(c.metrics?.owner||c.snapshot?.owner)));
-    const waiting=mine.filter(c=>c.currentWaiting===true||c.metrics?.currentWaiting===true),sellers=new Map(),ensure=s=>{const k=normSeller(s||'Sin asignar');if(!sellers.has(k))sellers.set(k,{name:s||'Sin asignar',waiting:0,active:0,lastActivityAt:null});return sellers.get(k)};
-    for(const c of mine){const seller=c.metrics?.owner||c.snapshot?.owner||'Sin asignar',s=ensure(seller);if(c.currentWaiting===true||c.metrics?.currentWaiting===true)s.waiting++;const iso=c.metrics?.lastSellerActivityAt;if(iso&&(!s.lastActivityAt||iso>s.lastActivityAt))s.lastActivityAt=iso}
+    const waiting=mine.filter(c=>(c.currentWaiting===true||c.metrics?.currentWaiting===true||c.metrics?.waitingForHuman===true)&&this.stateRelevantForCoaching(c,cfg,now)),sellers=new Map(),ensure=s=>{const k=normSeller(s||'Sin asignar');if(!sellers.has(k))sellers.set(k,{name:s||'Sin asignar',waiting:0,active:0,lastActivityAt:null});return sellers.get(k)};
+    const configuredSellerLabel=cfg.sellerLabel||cfg.name||null;
+    for(const c of mine){const seller=configuredSellerLabel||c.metrics?.owner||c.snapshot?.owner||'Sin asignar',s=ensure(seller);if(waiting.includes(c))s.waiting++;const iso=c.metrics?.lastSellerActivityAt;if(iso&&(!s.lastActivityAt||iso>s.lastActivityAt))s.lastActivityAt=iso}
     const cutoff=now.getTime()-cfg.lookbackMinutes*60000;for(const s of sellers.values())s.active=s.lastActivityAt&&new Date(s.lastActivityAt).getTime()>=cutoff?1:0;
     const actions=await this.store.listSupervisionActionsForSellers([...wanted],300),open=actions.filter(a=>['PENDING','WAITING_FOR_ACTION'].includes(a.status)),failedRecent=actions.filter(a=>a.status==='FAILED'&&a.verifiedAt&&new Date(a.verifiedAt).getTime()>=cutoff),recent=actions.filter(a=>a.status==='VERIFIED'&&a.verifiedAt&&new Date(a.verifiedAt).getTime()>=cutoff);
     const lines=[`SUPERVISOR REMOTO — ${cfg.name}`,`Horario ${cfg.startTime}-${cfg.endTime} · frecuencia ${cfg.frequencyMinutes} min`,'','👥 VENDEDORES'];
     for(const s of [...sellers.values()].sort((a,b)=>a.name.localeCompare(b.name)))lines.push(`${s.active?'🟢':'⚪'} ${s.name} — esperando ${s.waiting}`);
-    lines.push('','🚨 CLIENTES ESPERANDO');if(!waiting.length)lines.push('Sin clientes esperando.');else waiting.slice(0,12).forEach(c=>lines.push(`• ${c.snapshot?.contactName||c.id} — ${c.metrics?.owner||c.snapshot?.owner||'Sin asignar'} — https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`));
-    lines.push('','🎯 CORRECCIONES PENDIENTES');if(!open.length)lines.push('Sin correcciones pendientes.');else open.slice(0,12).forEach(a=>lines.push(`🟠 ${a.seller} — ${a.actionType}${a.severity?` · ${a.severity}`:''}\nProblema: ${a.reason||'-'}\nEsperado: ${a.expectedBehavior||'-'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`));
-    if(failedRecent.length){lines.push('','❌ CORRECCIONES NO APLICADAS');failedRecent.slice(0,10).forEach(a=>lines.push(`• ${a.seller} — ${a.actionType}\n${a.verificationResult?.reason||'La siguiente acción no cumplió la corrección.'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`))}
-    if(recent.length){lines.push('','✅ CORRECCIONES APLICADAS');recent.slice(0,10).forEach(a=>lines.push(`• ${a.seller} — ${a.actionType}${a.verificationResult?.reason?` — ${a.verificationResult.reason}`:''}`))}
+    lines.push('','🚨 CLIENTES ESPERANDO');if(!waiting.length)lines.push('Sin clientes esperando.');else waiting.slice(0,12).forEach(c=>lines.push(`• ${c.snapshot?.contactName||c.snapshot?.name||c.metrics?.contactName||c.id} — ${configuredSellerLabel||c.metrics?.owner||c.snapshot?.owner||'Sin asignar'}
+https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`));
+    lines.push('','🎯 CORRECCIONES PENDIENTES');if(!open.length)lines.push('Sin correcciones pendientes.');else open.slice(0,12).forEach(a=>lines.push(`🟠 ${configuredSellerLabel||a.seller} — ${a.actionType}${a.severity?` · ${a.severity}`:''}\nProblema: ${a.reason||'-'}\nEsperado: ${a.expectedBehavior||'-'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`));
+    if(failedRecent.length){lines.push('','❌ CORRECCIONES NO APLICADAS');failedRecent.slice(0,10).forEach(a=>lines.push(`• ${configuredSellerLabel||a.seller} — ${a.actionType}\n${a.verificationResult?.reason||'La siguiente acción no cumplió la corrección.'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`))}
+    if(recent.length){lines.push('','✅ CORRECCIONES APLICADAS');recent.slice(0,10).forEach(a=>lines.push(`• ${configuredSellerLabel||a.seller} — ${a.actionType}${a.verificationResult?.reason?` — ${a.verificationResult.reason}`:''}`))}
     const report={id:id('remote_report'),supervisorId:cfg.id,mode:'weekday',generatedAt:now.toISOString(),configSnapshot:cfg,summary:{sellerCount:sellers.size,waiting:waiting.length,pendingCorrections:open.length,failedRecent:failedRecent.length,verifiedRecent:recent.length},text:lines.join('\n')};await this.store.saveRemoteReport(report.id,report);return report;
   }
   async buildWeekendGuardReport(cfg,{now=new Date()}={}){

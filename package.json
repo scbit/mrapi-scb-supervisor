@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - automatic seller coaching and next-action verification",
+  "description": "SUPERVISOR SCB V3 - relevant coaching window and cleaner seller report",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
