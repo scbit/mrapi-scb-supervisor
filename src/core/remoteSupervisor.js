@@ -157,6 +157,16 @@ class RemoteSupervisorService{
   }
 
 
+
+  sellerScheduleStatus(cfg,now=new Date()){
+    const setupDays=Array.isArray(cfg.days)&&cfg.days.length?cfg.days:['Mon','Tue','Wed','Thu','Fri'];
+    const p=localParts(now,'America/Argentina/Buenos_Aires');
+    const cur=p.hour*60+p.minute,start=mins(cfg.startTime||'09:00'),end=mins(cfg.endTime||'17:00');
+    const inDay=setupDays.includes(p.weekday);
+    const inHours=cur>=start&&cur<end;
+    return{active:inDay&&inHours,inDay,inHours,weekday:p.weekday,currentMinutes:cur};
+  }
+
   coachingCutoff(cfg,now=new Date()){
     const minutes=Math.max(Number(cfg.frequencyMinutes||30)*2,60);
     return new Date(now.getTime()-minutes*60000);
