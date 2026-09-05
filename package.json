@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.9.4",
+  "version": "0.9.6",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - seller Telegram groups + general summary + weekend guard",
+  "description": "SUPERVISOR SCB V3 - weekend/general Telegram test fix + proper line breaks",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
