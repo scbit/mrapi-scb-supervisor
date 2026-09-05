@@ -91,7 +91,7 @@ class RemoteSupervisorService{
 
   defaultNetworkSettings(){
     return{timezone:'America/Argentina/Buenos_Aires',
-      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:30,generalFrequencyMinutes:60,generalChatId:null},
+      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:30,generalFrequencyMinutes:60,generalChatId:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
       weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
     };
   }
@@ -224,8 +224,12 @@ class RemoteSupervisorService{
     const wd=setup.settings.weekday;if(!(wd.days||[]).includes(p.weekday)||cur<mins(wd.startTime)||cur>=mins(wd.endTime)|| (cur>=mins(wd.pauseStart)&&cur<mins(wd.pauseEnd)))return{at:now.toISOString(),mode:'weekday',results:[{skipped:true,reason:'outside_schedule_or_pause'}]};
     await this.verifyPending();
     for(const cfg of setup.sellerGroups.filter(x=>x.enabled!==false)){try{results.push({sellerId:cfg.sellerId,...await this.runSupervisor(cfg.id,{now,send})})}catch(e){results.push({sellerId:cfg.sellerId,error:e.message})}}
-    const gcp=await this.store.getRemoteCheckpoint('network_general_last'),gf=Number(wd.generalFrequencyMinutes||60);
-    if(!gcp?.at||now-new Date(gcp.at)>=gf*60000){const report=await this.buildGeneralSummary({now}),sent=send&&wd.generalChatId?await this.telegram.send(report.text,wd.generalChatId):null;await this.store.saveRemoteCheckpoint('network_general_last',{at:now.toISOString(),reportId:report.id});results.push({general:true,report,sent})}
+    const generalDays=wd.generalDays||wd.days||['Mon','Tue','Wed','Thu','Fri'],generalStart=mins(wd.generalStartTime||wd.startTime||'09:00'),generalEnd=mins(wd.generalEndTime||wd.endTime||'17:00');
+    const generalActive=generalDays.includes(p.weekday)&&cur>=generalStart&&cur<generalEnd;
+    if(generalActive){
+      const gcp=await this.store.getRemoteCheckpoint('network_general_last'),gf=Number(wd.generalFrequencyMinutes||60);
+      if(!gcp?.at||now-new Date(gcp.at)>=gf*60000){const report=await this.buildGeneralSummary({now}),sent=send&&wd.generalChatId?await this.telegram.send(report.text,wd.generalChatId):null;await this.store.saveRemoteCheckpoint('network_general_last',{at:now.toISOString(),reportId:report.id});results.push({general:true,report,sent})}
+    }else results.push({general:true,skipped:true,reason:'general_outside_schedule'});
     return{at:now.toISOString(),mode:'weekday',results};
   }
   async sellerCompliance(seller){const rows=await this.store.listSupervisionActionsForSeller(seller,500),verified=rows.filter(x=>x.status==='VERIFIED').length,failed=rows.filter(x=>x.status==='FAILED').length,total=verified+failed,byType={};for(const r of rows)byType[r.actionType]=(byType[r.actionType]||0)+1;return{seller,total,verified,failed,pending:rows.filter(x=>['PENDING','WAITING_FOR_ACTION'].includes(x.status)).length,compliancePct:total?Math.round(verified/total*100):null,byType}}
