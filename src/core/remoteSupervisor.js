@@ -341,12 +341,26 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     return{at:now.toISOString(),mode:'weekday',results};
   }
 
+
+  async saveCriticalSystemIncident(type,reason,details={}){
+    const key=`${type}__${new Date().toISOString().slice(0,13)}`;
+    await this.store.saveCriticalIncident(key,{
+      type,category:'SYSTEM',severity:'CRITICAL',status:'OPEN',
+      reason:String(reason||type),details,detectedAt:new Date().toISOString()
+    });
+  }
+
   async getAutomationHealth(){
     const setup=await this.getNetworkSetup(),control=await this.store.getRemoteCheckpoint('automation_control')||{},health=await this.store.getRemoteCheckpoint('automation_health')||{},lock=await this.store.getRemoteCheckpoint('automation_tick_lock')||{};
     const safety=setup.settings.liveDaily?.safety||{};
     const paused=control.paused===true||health.autoPaused===true;
+    const scheduler=await this.store.getRemoteCheckpoint('scheduler_heartbeat')||{};
+    const freq=Number(setup.settings.weekday?.sellerFrequencyMinutes||30);
+    const schedulerAgeMs=scheduler.at?Date.now()-new Date(scheduler.at).getTime():null;
+    const schedulerStatus=!scheduler.at?'NOT_CONNECTED':schedulerAgeMs<=(freq*2+15)*60000?'ACTIVE':'LATE';
     return{
       status:paused?'PAUSED':health.running===true?'RUNNING':health.lastError?'ERROR':'OK',
+      scheduler:{status:schedulerStatus,lastHeartbeatAt:scheduler.at||null,lastMode:scheduler.mode||null,lastSuccessAt:scheduler.lastSuccessAt||null},
       paused,
       pauseReason:control.paused===true?(control.reason||'MANUAL'):health.autoPaused===true?(health.pauseReason||'AUTO_PAUSED'):null,
       deliveryMode:setup.settings.liveDaily?.deliveryMode||'DRY_RUN',
@@ -371,8 +385,9 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     await this.store.saveRemoteCheckpoint('automation_health',{autoPaused:false,pauseReason:null,consecutiveFailures:0,lastError:null});
     return this.getAutomationHealth();
   }
-  async automationTick({engine,now=new Date(),send=true,force=false}={}){
+  async automationTick({engine,now=new Date(),send=true,force=false,source='manual'}={}){
     if(!engine)throw new Error('SUPERVISOR_ENGINE_REQUIRED');
+    if(source==='scheduler')await this.store.saveRemoteCheckpoint('scheduler_heartbeat',{at:now.toISOString(),mode:'tick'});
     const setup=await this.getNetworkSetup(),safety=setup.settings.liveDaily?.safety||{},control=await this.store.getRemoteCheckpoint('automation_control')||{},prior=await this.store.getRemoteCheckpoint('automation_health')||{};
     if((control.paused===true||prior.autoPaused===true)&&!force)return{skipped:true,reason:'AUTOMATION_PAUSED',health:await this.getAutomationHealth()};
 
@@ -401,6 +416,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
           running:false,autoPaused:true,pauseReason:reasons.join('+'),lastError:`Safety stop: ${reasons.join(', ')}`,
           lastDurationMs:Date.now()-started,lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode}
         });
+        await this.saveCriticalSystemIncident('SAFETY_LIMIT_REACHED',reasons.join('+'),{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode});
         return{skipped:true,reason:'SAFETY_LIMIT_REACHED',reasons,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},health:await this.getAutomationHealth()};
       }
 
@@ -416,6 +432,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
           lastError:`Actual Telegram sends ${actualTelegramSends} exceeded max ${maxTelegram}`,
           lastDurationMs:Date.now()-started,lastResultSummary:summary
         });
+        await this.saveCriticalSystemIncident('TELEGRAM_BUDGET_EXCEEDED',`Actual Telegram sends ${actualTelegramSends} exceeded max ${maxTelegram}`,{actualTelegramSends,maxTelegram});
         return{skipped:true,reason:'TELEGRAM_BUDGET_EXCEEDED',result,health:await this.getAutomationHealth()};
       }
       await this.store.saveRemoteCheckpoint('automation_health',{
@@ -424,12 +441,14 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
         lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},
         lastResultSummary:summary
       });
+      if(source==='scheduler')await this.store.saveRemoteCheckpoint('scheduler_heartbeat',{at:now.toISOString(),mode:result.mode||'tick',lastSuccessAt:new Date().toISOString()});
       return{skipped:false,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},result,health:await this.getAutomationHealth()};
     }catch(e){
       const failures=Number(prior.consecutiveFailures||0)+1,maxFailures=Number(safety.maxConsecutiveFailures||3),autoPaused=failures>=maxFailures;
       await this.store.saveRemoteCheckpoint('automation_health',{
         running:false,consecutiveFailures:failures,autoPaused,pauseReason:autoPaused?'CIRCUIT_BREAKER':null,lastError:String(e.message||e),lastDurationMs:Date.now()-started,lastTickAt:now.toISOString()
       });
+      if(autoPaused)await this.saveCriticalSystemIncident('CIRCUIT_BREAKER',`Automation paused after ${failures} consecutive failures`,{failures,error:String(e.message||e)});
       const err=new Error(autoPaused?`AUTOMATION_PAUSED_AFTER_${failures}_FAILURES:${e.message}`:e.message);err.cause=e;throw err;
     }finally{
       await this.store.releaseRemoteLock('automation_tick_lock',{owner,now:new Date()}).catch(()=>{});

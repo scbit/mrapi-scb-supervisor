@@ -156,7 +156,16 @@ class LiveDailySupervisor{
       if(commercial.quality!=='BIEN_TRABAJADO'){
         if(!obs){
           obs={id:id('daily_case'),source:'DAILY_V3',supervisorId:cfg.id,seller:row.seller||row.owner,sellerKey:norm(row.seller||row.owner),caseKey,conversationId:row.conversationId,dealId:row.dealId||null,issueType:'COMMERCIAL_CHAT_CASE',severity:commercial.severity,status:'PENDING',quality:commercial.quality,dimensions:commercial.dimensions,findings:commercial.findings,reason:commercial.findings.map(x=>x.label).join(' | '),expected:commercial.expected,openedAt:now.toISOString(),lastSeenAt:now.toISOString(),lastHumanAtAtDetection:row.lastHumanAt||null,sourceDate:date,hubUrl:row.hubUrl};
-          await this.store.saveLiveDailyObservation(obs.id,obs); created.push(obs); openByCase.set(caseKey,obs);
+          await this.store.saveLiveDailyObservation(obs.id,obs);
+          const criticalFinding=(commercial.dimensions?.responseTime?.code==='NO_HUMAN_RESPONSE')||(commercial.dimensions?.responseTime?.code==='VERY_LATE'&&commercial.dimensions?.responseQuality?.level==='BAD');
+          if(criticalFinding){
+            await this.store.saveCriticalIncident(`commercial__${caseKey}`,{
+              type:'COMMERCIAL_CRITICAL',category:'COMMERCIAL',severity:'CRITICAL',status:'OPEN',
+              seller:obs.seller,conversationId:obs.conversationId,hubUrl:obs.hubUrl,
+              reason:commercial.findings.map(x=>x.label).join(' | '),detectedAt:now.toISOString(),sourceDate:date
+            });
+          }
+          created.push(obs); openByCase.set(caseKey,obs);
         }else{
           const newHuman=!!row.lastHumanAt&&!!obs.lastHumanAtAtDetection&&new Date(row.lastHumanAt)>new Date(obs.lastHumanAtAtDetection);
           const patch={lastSeenAt:now.toISOString(),severity:commercial.severity,quality:commercial.quality,dimensions:commercial.dimensions,findings:commercial.findings,reason:commercial.findings.map(x=>x.label).join(' | '),expected:commercial.expected};

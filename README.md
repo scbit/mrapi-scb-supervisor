@@ -91,3 +91,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - El límite de Telegram ya no cuenta grupos configurados.
 - Solo considera envíos reales del tick.
 - DRY_RUN no puede pausarse por cantidad de grupos configurados.
+
+## v0.11.9 — Operations UI + archive
+- Oculta de la operación principal los bloques legacy de reportes manuales; el código sigue disponible internamente.
+- `/reports` concentra histórico de reportes e incidentes críticos.
+- Scheduler status se basa en heartbeat real: NOT_CONNECTED / ACTIVE / LATE.
+- Un Cloud Scheduler real debe llamar `/api/supervisor/remote/tick` con `{"source":"scheduler",...}` para dejar heartbeat.
+- Los reportes Daily Live ya persistían; ahora hay API de archivo para consultarlos.
+- Incidentes críticos persistidos: circuit breaker, safety limits, Telegram budget y casos comerciales conservadores (sin respuesta humana o muy tardía + mala calidad).
