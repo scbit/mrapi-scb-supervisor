@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.11.9",
+  "version": "0.11.10",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Clean operations UI, scheduler heartbeat, report archive and critical incidents",
+  "description": "SUPERVISOR SCB V3 - Reports auth token inheritance fix",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

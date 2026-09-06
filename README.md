@@ -99,3 +99,7 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Un Cloud Scheduler real debe llamar `/api/supervisor/remote/tick` con `{"source":"scheduler",...}` para dejar heartbeat.
 - Los reportes Daily Live ya persistían; ahora hay API de archivo para consultarlos.
 - Incidentes críticos persistidos: circuit breaker, safety limits, Telegram budget y casos comerciales conservadores (sin respuesta humana o muy tardía + mala calidad).
+
+## v0.11.10 — Reports auth fix
+- `/reports` reutiliza el mismo `localStorage.supervisor_api_token` de la pantalla principal.
+- Ya no usa una clave distinta (`supervisorToken`) que provocaba 401/UNAUTHORIZED.

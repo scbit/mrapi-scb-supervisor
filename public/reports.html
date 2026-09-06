@@ -16,7 +16,7 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:9px;max-h
 <div class="card"><h2>Estado del scheduler</h2><div id="health">Cargando…</div></div>
 
 <div class="card"><h2>Reportes guardados</h2>
-<div class="row"><input id="token" type="password" placeholder="Supervisor token"><input id="date" type="date"><button onclick="loadAll()">Actualizar</button></div>
+<div class="row"><input id="token" type="password" placeholder="Token del Supervisor" title="Se completa automáticamente con el mismo token guardado en la pantalla principal"><input id="date" type="date"><button onclick="loadAll()">Actualizar</button></div>
 <table><thead><tr><th>Fecha/hora</th><th>Vendedor / supervisor</th><th>Modo</th><th>Resumen</th><th></th></tr></thead><tbody id="reports"></tbody></table>
 </div>
 
@@ -29,11 +29,11 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:9px;max-h
 </div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const headers=()=>({'x-supervisor-token':token.value||localStorage.getItem('supervisorToken')||''});
+const headers=()=>({'x-supervisor-token':token.value||localStorage.getItem('supervisor_api_token')||''});
 async function req(url){const r=await fetch(url,{headers:headers()});const d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||r.statusText);return d}
 function summary(x){const s=x.summary||{};return Object.entries(s).slice(0,7).map(([k,v])=>`${k}: ${typeof v==='object'?JSON.stringify(v):v}`).join(' · ')}
 async function loadAll(){
-  if(token.value)localStorage.setItem('supervisorToken',token.value);
+  if(token.value)localStorage.setItem('supervisor_api_token',token.value);
   const q=date.value?`?date=${encodeURIComponent(date.value)}&limit=300`:'?limit=300';
   const [h,r,i]=await Promise.all([req('/api/supervisor/automation/health'),req('/api/supervisor/archive/reports'+q),req('/api/supervisor/archive/incidents?limit=300')]);
   const sch=h.health.scheduler||{};
@@ -42,5 +42,5 @@ async function loadAll(){
   incidents.innerHTML=(i.incidents||[]).map(x=>`<tr><td>${esc(x.detectedAt||'-')}</td><td><span class="badge critical">${esc(x.type||'-')}</span></td><td>${esc(x.reason||'-')}</td><td>${esc(x.seller||'-')}</td><td><span class="badge open">${esc(x.status||'-')}</span></td><td>${x.hubUrl?`<a target="_blank" href="${esc(x.hubUrl)}">Abrir HUB</a>`:'-'}</td></tr>`).join('')||'<tr><td colspan="6">Sin incidentes críticos.</td></tr>';
 }
 function showReport(raw){detail.textContent=JSON.stringify(JSON.parse(raw),null,2);detailCard.classList.remove('hidden');detailCard.scrollIntoView({behavior:'smooth'})}
-token.value=localStorage.getItem('supervisorToken')||'';loadAll().catch(e=>health.textContent='Ingresá el token y presioná Actualizar: '+e.message);
+token.value=localStorage.getItem('supervisor_api_token')||'';loadAll().catch(e=>health.textContent='No pude cargar los datos: '+e.message);
 </script></body></html>
