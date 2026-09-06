@@ -376,13 +376,6 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     const setup=await this.getNetworkSetup(),safety=setup.settings.liveDaily?.safety||{},control=await this.store.getRemoteCheckpoint('automation_control')||{},prior=await this.store.getRemoteCheckpoint('automation_health')||{};
     if((control.paused===true||prior.autoPaused===true)&&!force)return{skipped:true,reason:'AUTOMATION_PAUSED',health:await this.getAutomationHealth()};
 
-    const enabledGroups=setup.sellerGroups.filter(x=>x.enabled!==false).length;
-    const maxTelegram=Number(safety.maxTelegramPerTick||25);
-    if(enabledGroups+1>maxTelegram&&!force){
-      await this.store.saveRemoteCheckpoint('automation_health',{autoPaused:true,pauseReason:'TELEGRAM_BUDGET_EXCEEDED',lastError:`Configured destinations ${enabledGroups+1} exceed max ${maxTelegram}`,lastTickAt:now.toISOString()});
-      return{skipped:true,reason:'TELEGRAM_BUDGET_EXCEEDED',health:await this.getAutomationHealth()};
-    }
-
     const owner=`tick_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,ttlMs=Number(safety.lockMinutes||15)*60000;
     const lock=await this.store.acquireRemoteLock('automation_tick_lock',{owner,now,ttlMs});
     if(!lock.acquired)return{skipped:true,reason:'TICK_ALREADY_RUNNING',health:await this.getAutomationHealth()};
@@ -412,8 +405,19 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
       }
 
       const result=await this.tick({now,send});
-      const summary={mode:result.mode,results:Array.isArray(result.results)?result.results.length:0,errors:Array.isArray(result.results)?result.results.filter(x=>x?.error).length:0};
+      const resultRows=Array.isArray(result.results)?result.results:[];
+      const actualTelegramSends=resultRows.filter(x=>x?.sent===true||x?.telegramSent===true||x?.delivery?.telegram===true).length;
+      const maxTelegram=Number(safety.maxTelegramPerTick||25);
+      const summary={mode:result.mode,results:resultRows.length,errors:resultRows.filter(x=>x?.error).length,telegramSent:actualTelegramSends};
       if(summary.errors>0)throw new Error(`REMOTE_TICK_PARTIAL_FAILURES:${summary.errors}`);
+      if(send===true&&actualTelegramSends>maxTelegram&&!force){
+        await this.store.saveRemoteCheckpoint('automation_health',{
+          running:false,autoPaused:true,pauseReason:'TELEGRAM_BUDGET_EXCEEDED',
+          lastError:`Actual Telegram sends ${actualTelegramSends} exceeded max ${maxTelegram}`,
+          lastDurationMs:Date.now()-started,lastResultSummary:summary
+        });
+        return{skipped:true,reason:'TELEGRAM_BUDGET_EXCEEDED',result,health:await this.getAutomationHealth()};
+      }
       await this.store.saveRemoteCheckpoint('automation_health',{
         running:false,autoPaused:false,pauseReason:null,lastSuccessAt:new Date().toISOString(),lastDurationMs:Date.now()-started,
         consecutiveFailures:0,lastError:null,

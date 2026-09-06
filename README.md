@@ -85,3 +85,9 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Reanudar: `POST /api/supervisor/automation/resume`.
 - Límites por tick y estado se guardan solo en la BD propia `supervisor-scb`.
 - Si alcanza un límite o timeout lógico, se pausa antes de enviar Telegram.
+
+
+## v0.11.8 Safety budget fix
+- El límite de Telegram ya no cuenta grupos configurados.
+- Solo considera envíos reales del tick.
+- DRY_RUN no puede pausarse por cantidad de grupos configurados.

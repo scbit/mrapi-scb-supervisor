@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.11.7",
+  "version": "0.11.8",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Automation safety layer, health, pause/resume and circuit breaker",
+  "description": "SUPERVISOR SCB V3 - Safety budget fix: count actual Telegram sends, not configured destinations",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
