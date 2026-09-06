@@ -125,7 +125,7 @@ class LiveDailySupervisor{
       changedCases.push(row);
     }
 
-    const cases=(await this.store.listLiveDailyCases(date,sellerKeys,2000)).filter(x=>!x.row?.excludedFromReport).map(x=>x.row);
+    const cases=(await this.store.listLiveDailyCases(date,sellerKeys,2000)).filter(x=>!x.row?.excludedFromReport&&Number(x.row?.inboundCount||0)>0).map(x=>x.row);
     const observations=await this.reconcileConversationObservations(cfg,cases,{now,date});
     const overdue=await this.reconcileOverdueDeals(cfg,{now,date,activeDeals});
     const allObs=await this.store.listLiveDailyObservationsForSellers(sellerKeys,2000);
@@ -136,13 +136,26 @@ class LiveDailySupervisor{
 
   async reconcileConversationObservations(cfg,cases,{now,date}){
     const sellerKeys=(cfg.sellers||[]).map(norm),existing=await this.store.listLiveDailyObservationsForSellers(sellerKeys,2000),openByCase=new Map();
-    for(const o of existing.filter(o=>o.source==='DAILY_V3'&&OPEN_STATUSES.has(o.status)&&o.supervisorId===cfg.id)) openByCase.set(String(o.caseKey),o);
+
+    // Migration: older builds created one observation per issue. New business rule is one chat = one case.
+    for(const o of existing){
+      if(o.source==='DAILY_V3'&&o.supervisorId===cfg.id&&o.issueType!=='COMMERCIAL_CHAT_CASE'&&OPEN_STATUSES.has(o.status)){
+        await this.store.saveLiveDailyObservation(o.id,{
+          status:'SUPERSEDED',
+          supersededAt:now.toISOString(),
+          supersededReason:'Migrated to one-chat-one-case supervision'
+        });
+        o.status='SUPERSEDED';
+      }
+    }
+
+    for(const o of existing.filter(o=>o.source==='DAILY_V3'&&o.issueType==='COMMERCIAL_CHAT_CASE'&&OPEN_STATUSES.has(o.status)&&o.supervisorId===cfg.id)) openByCase.set(String(o.caseKey),o);
     const created=[],corrected=[],notCorrected=[];
     for(const row of cases){
       const caseKey=String(row.conversationId),commercial=buildCommercialCase(row); let obs=openByCase.get(caseKey);
       if(commercial.quality!=='BIEN_TRABAJADO'){
         if(!obs){
-          obs={id:id('daily_case'),source:'DAILY_V3',supervisorId:cfg.id,seller:row.seller||row.owner,sellerKey:norm(row.seller||row.owner),caseKey,conversationId:row.conversationId,dealId:row.dealId||null,issueType:'COMMERCIAL_CHAT_CASE',severity:commercial.severity,status:'PENDING',quality:commercial.quality,findings:commercial.findings,reason:commercial.findings.map(x=>x.label).join(' | '),expected:commercial.expected,openedAt:now.toISOString(),lastSeenAt:now.toISOString(),lastHumanAtAtDetection:row.lastHumanAt||null,sourceDate:date,hubUrl:row.hubUrl};
+          obs={id:id('daily_case'),source:'DAILY_V3',supervisorId:cfg.id,seller:row.seller||row.owner,sellerKey:norm(row.seller||row.owner),caseKey,conversationId:row.conversationId,dealId:row.dealId||null,issueType:'COMMERCIAL_CHAT_CASE',severity:commercial.severity,status:'PENDING',quality:commercial.quality,dimensions:commercial.dimensions,findings:commercial.findings,reason:commercial.findings.map(x=>x.label).join(' | '),expected:commercial.expected,openedAt:now.toISOString(),lastSeenAt:now.toISOString(),lastHumanAtAtDetection:row.lastHumanAt||null,sourceDate:date,hubUrl:row.hubUrl};
           await this.store.saveLiveDailyObservation(obs.id,obs); created.push(obs); openByCase.set(caseKey,obs);
         }else{
           const newHuman=!!row.lastHumanAt&&!!obs.lastHumanAtAtDetection&&new Date(row.lastHumanAt)>new Date(obs.lastHumanAtAtDetection);
@@ -256,14 +269,21 @@ class LiveDailySupervisor{
   }
 
   buildTelegramReport(cfg,result,{now=new Date(),deliveryMode='DRY_RUN'}={}){
-    const rows=result.cases||[],obs=(result.allObservations||[]).filter(o=>o.supervisorId===cfg.id&&!o.historicalBaseline&&o.status!=='BASELINED'),day=result.date;
+    const rows=result.cases||[],obs=(result.allObservations||[]).filter(o=>o.supervisorId===cfg.id&&!o.historicalBaseline&&o.status!=='BASELINED'&&o.status!=='SUPERSEDED'),day=result.date;
     const pending=obs.filter(o=>OPEN_STATUSES.has(o.status)),corrected=obs.filter(o=>o.status==='CORRECTED'&&String(o.correctedAt||'').startsWith(day)),notCorrected=obs.filter(o=>o.status==='NOT_CORRECTED');
     const red=pending.filter(o=>o.issueType==='OVERDUE_DEAL'&&o.severity==='RED');
-    const s=result.bySeller||[];
-    const totals=s.reduce((a,x)=>{a.clientChats+=Number(x.clientChats||0);a.responded+=Number(x.respondedClientChats||0);a.noResponse+=Number(x.noHumanResponse||0);a.late+=Number(x.late||0);a.noDiscovery+=Number(x.operationalWithoutDiscovery||0);a.unexplored+=Number(x.unexploredPotential||0);return a},{clientChats:0,responded:0,noResponse:0,late:0,noDiscovery:0,unexplored:0});
-    totals.good=(result.cases||[]).filter(row=>buildCommercialCase(row).quality==='BIEN_TRABAJADO').length;
-    totals.review=(result.cases||[]).filter(row=>buildCommercialCase(row).quality==='REVISAR').length;
-    totals.toCorrect=(result.cases||[]).filter(row=>buildCommercialCase(row).quality==='A_CORREGIR').length;
+    const reportCases=[...new Map((result.cases||[]).filter(row=>Number(row.inboundCount||0)>0).map(row=>[String(row.conversationId),row])).values()];
+    const totals={
+      clientChats:reportCases.length,
+      responded:reportCases.filter(x=>x.humanResponded).length,
+      noResponse:reportCases.filter(x=>x.noHumanResponse).length,
+      late:reportCases.filter(x=>Number(x.lateCount||0)>0).length,
+      noDiscovery:reportCases.filter(x=>x.operationalWithoutDiscovery).length,
+      unexplored:reportCases.filter(x=>x.unexploredPotential).length
+    };
+    totals.good=reportCases.filter(row=>buildCommercialCase(row).quality==='BIEN_TRABAJADO').length;
+    totals.review=reportCases.filter(row=>buildCommercialCase(row).quality==='REVISAR').length;
+    totals.toCorrect=reportCases.filter(row=>buildCommercialCase(row).quality==='A_CORREGIR').length;
     const label=cfg.sellerLabel||cfg.name||cfg.sellers?.join(', ')||'Vendedor';
     const lines=[`📊 SUPERVISIÓN DIARIA EN VIVO — ${label}`,`Fecha ${day} · acumulado desde 09:00`,`Modo: ${deliveryMode}`,'',`Clientes del día: ${totals.clientChats}`,`Respondidos: ${totals.responded}`,`Sin respuesta humana: ${totals.noResponse}`,`Respuestas tarde: ${totals.late}`,`Bien trabajados: ${totals.good}`,`Revisar: ${totals.review}`,`A corregir: ${totals.toCorrect}`,`Operativas sin indagar: ${totals.noDiscovery}`,`Potencial no explorado: ${totals.unexplored}`,'',`🟠 Pendientes: ${pending.length}`,`✅ Corregidas hoy: ${corrected.length}`,`❌ No corregidas: ${notCorrected.length}`,`🔴 Nuevos tratos +7 días bajo Supervisor: ${red.length}`,`🧹 Backlog histórico en Recovery: ${result.observations?.overdue?.historicalOpen||0} (${result.observations?.overdue?.historicalRed||0} con +7 días)`];
     const newObs=[...(result.observations?.created||[]),...(result.observations?.overdue?.created||[])];

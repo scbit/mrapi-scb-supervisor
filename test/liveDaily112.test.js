@@ -19,5 +19,5 @@ test('0.11.2 seller dry-run accepts a historical test date',()=>{
 
 test('0.11.2 report isolates observations by supervisor group',()=>{
   const s=fs.readFileSync('src/core/liveDailySupervisor.js','utf8');
-  assert.ok(s.includes("filter(o=>o.supervisorId===cfg.id&&!o.historicalBaseline&&o.status!=='BASELINED')"));
+  assert.ok(s.includes("filter(o=>o.supervisorId===cfg.id&&!o.historicalBaseline&&o.status!=='BASELINED'&&o.status!=='SUPERSEDED')"));
 });
