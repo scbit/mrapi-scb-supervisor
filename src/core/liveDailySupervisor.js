@@ -30,8 +30,8 @@ function observationKey(sellerKey,caseKey,issueType){return `${sellerKey}__${Buf
 class LiveDailySupervisor{
   constructor({store,inbox,crm,aiProvider}){this.store=store;this.inbox=inbox;this.crm=crm;this.ai=aiProvider}
 
-  async analyzeSellerGroup(cfg,{now=new Date(),activeDeals=null}={}){
-    const date=argentinaDate(now),range=dayRange(date,now),sellerKeys=(cfg.sellers||[]).map(norm),wanted=new Set(sellerKeys);
+  async analyzeSellerGroup(cfg,{now=new Date(),activeDeals=null,dateOverride=null}={}){
+    const date=dateOverride||argentinaDate(now),range=dayRange(date,now),sellerKeys=(cfg.sellers||[]).map(norm),wanted=new Set(sellerKeys);
     const states=await this.store.listConversationStatesSince(range.fullFrom.toISOString(),2000);
     const relevantStates=states.filter(x=>wanted.has(norm(x.metrics?.owner||x.snapshot?.owner)));
     const changedCases=[];
@@ -114,14 +114,42 @@ class LiveDailySupervisor{
   async reconcileOverdueDeals(cfg,{now,date,activeDeals=null}){
     const sellerKeys=(cfg.sellers||[]).map(norm),deals=activeDeals||await this.store.listActiveDeals(20000);
     const mine=deals.filter(d=>sellerKeys.includes(norm(d.snapshot?.owner||d.owner)));
+    let baseline=await this.store.getLiveDailyBaseline(cfg.id);
+
+    // First run for this supervision group: snapshot the historical overdue backlog.
+    // Existing overdue deals belong to Recovery and MUST NOT create hundreds of new supervisor corrections.
+    if(!baseline){
+      const historical={};
+      for(const d of mine){
+        const snap=d.snapshot||d,st=stage(snap.stageNorm||snap.stage),due=snap.dueDate?new Date(snap.dueDate):null;
+        if(ACTIVE_OVERDUE_STAGES.has(st)&&due&&Number.isFinite(due.getTime())&&due<now){
+          historical[String(d.id)]={dueDate:snap.dueDate,stage:st,overdueDays:Math.floor((now-due)/86400000)};
+        }
+      }
+      baseline={createdAt:now.toISOString(),historicalOverdue:historical};
+      await this.store.saveLiveDailyBaseline(cfg.id,baseline);
+    }
+
+    const historicalIds=new Set(Object.keys(baseline.historicalOverdue||{}));
     const existing=await this.store.listLiveDailyObservationsForSellers(sellerKeys,2000);
-    const open=existing.filter(o=>o.source==='CRM_DUE_DATE'&&OPEN_STATUSES.has(o.status));
+    const open=existing.filter(o=>o.source==='CRM_DUE_DATE'&&OPEN_STATUSES.has(o.status)&&o.supervisorId===cfg.id&&!o.historicalBaseline);
     const seen=new Set(),created=[],updated=[],corrected=[];
+    let historicalOpen=0,historicalRed=0;
 
     for(const d of mine){
       const snap=d.snapshot||d,st=stage(snap.stageNorm||snap.stage),due=snap.dueDate?new Date(snap.dueDate):null;
       if(!ACTIVE_OVERDUE_STAGES.has(st)||!due||!Number.isFinite(due.getTime())||due>=now)continue;
-      const days=Math.floor((now-due)/86400000),caseKey=snap.conversationId||`deal:${d.id}`,seller=snap.owner||'No detectado',sellerKey=norm(seller);
+      const days=Math.floor((now-due)/86400000);
+
+      // Historical debt remains visible only as a compact Recovery backlog metric.
+      // If the deal leaves the overdue condition and later becomes overdue again, it becomes a new supervisor case.
+      if(historicalIds.has(String(d.id))){
+        historicalOpen++;
+        if(days>=7)historicalRed++;
+        continue;
+      }
+
+      const caseKey=snap.conversationId||`deal:${d.id}`,seller=snap.owner||'No detectado',sellerKey=norm(seller);
       seen.add(String(d.id));
       let obs=open.find(o=>String(o.dealId)===String(d.id));
       const severity=days>=7?'RED':'HIGH',reason=days>=7?`🔴 Trato vencido +${days} días en ${st}.`:`Trato vencido +${days} días en ${st}.`;
@@ -136,6 +164,20 @@ class LiveDailySupervisor{
       }
     }
 
+    // Historical IDs that are now fixed are removed from baseline. If they later expire again,
+    // they are treated as a brand-new supervisor violation.
+    const historicalNext={...(baseline.historicalOverdue||{})};
+    for(const dealId of Object.keys(historicalNext)){
+      const d=mine.find(x=>String(x.id)===String(dealId));
+      if(!d){delete historicalNext[dealId];continue}
+      const snap=d.snapshot||d,st=stage(snap.stageNorm||snap.stage),due=snap.dueDate?new Date(snap.dueDate):null;
+      const stillOverdue=ACTIVE_OVERDUE_STAGES.has(st)&&due&&Number.isFinite(due.getTime())&&due<now;
+      if(!stillOverdue)delete historicalNext[dealId];
+    }
+    if(Object.keys(historicalNext).length!==historicalIds.size){
+      await this.store.saveLiveDailyBaseline(cfg.id,{historicalOverdue:historicalNext});
+    }
+
     for(const obs of open){
       if(seen.has(String(obs.dealId)))continue;
       const d=await this.store.getDealState(obs.dealId);
@@ -147,17 +189,17 @@ class LiveDailySupervisor{
         await this.store.saveLiveDailyObservation(obs.id,patch);corrected.push({...obs,...patch});
       }
     }
-    return{created,updated,corrected};
+    return{created,updated,corrected,historicalOpen,historicalRed,baselineCreatedAt:baseline.createdAt};
   }
 
   buildTelegramReport(cfg,result,{now=new Date(),deliveryMode='DRY_RUN'}={}){
-    const rows=result.cases||[],obs=result.allObservations||[],day=result.date;
+    const rows=result.cases||[],obs=(result.allObservations||[]).filter(o=>o.supervisorId===cfg.id),day=result.date;
     const pending=obs.filter(o=>OPEN_STATUSES.has(o.status)),corrected=obs.filter(o=>o.status==='CORRECTED'&&String(o.correctedAt||'').startsWith(day)),notCorrected=obs.filter(o=>o.status==='NOT_CORRECTED');
     const red=pending.filter(o=>o.issueType==='OVERDUE_DEAL'&&o.severity==='RED');
     const s=result.bySeller||[];
     const totals=s.reduce((a,x)=>{a.clientChats+=Number(x.clientChats||0);a.responded+=Number(x.respondedClientChats||0);a.noResponse+=Number(x.noHumanResponse||0);a.late+=Number(x.late||0);a.good+=Number(x.goodCommercial||0);a.noDiscovery+=Number(x.operationalWithoutDiscovery||0);a.unexplored+=Number(x.unexploredPotential||0);return a},{clientChats:0,responded:0,noResponse:0,late:0,good:0,noDiscovery:0,unexplored:0});
     const label=cfg.sellerLabel||cfg.name||cfg.sellers?.join(', ')||'Vendedor';
-    const lines=[`📊 SUPERVISIÓN DIARIA EN VIVO — ${label}`,`Fecha ${day} · acumulado desde 09:00`,`Modo: ${deliveryMode}`,'',`Clientes del día: ${totals.clientChats}`,`Respondidos: ${totals.responded}`,`Sin respuesta humana: ${totals.noResponse}`,`Respuestas tarde: ${totals.late}`,`Buenas respuestas comerciales: ${totals.good}`,`Operativas sin indagar: ${totals.noDiscovery}`,`Potencial no explorado: ${totals.unexplored}`,'',`🟠 Pendientes: ${pending.length}`,`✅ Corregidas hoy: ${corrected.length}`,`❌ No corregidas: ${notCorrected.length}`,`🔴 Tratos +7 días vencidos: ${red.length}`];
+    const lines=[`📊 SUPERVISIÓN DIARIA EN VIVO — ${label}`,`Fecha ${day} · acumulado desde 09:00`,`Modo: ${deliveryMode}`,'',`Clientes del día: ${totals.clientChats}`,`Respondidos: ${totals.responded}`,`Sin respuesta humana: ${totals.noResponse}`,`Respuestas tarde: ${totals.late}`,`Buenas respuestas comerciales: ${totals.good}`,`Operativas sin indagar: ${totals.noDiscovery}`,`Potencial no explorado: ${totals.unexplored}`,'',`🟠 Pendientes: ${pending.length}`,`✅ Corregidas hoy: ${corrected.length}`,`❌ No corregidas: ${notCorrected.length}`,`🔴 Nuevos tratos +7 días bajo Supervisor: ${red.length}`,`🧹 Backlog histórico en Recovery: ${result.observations?.overdue?.historicalOpen||0} (${result.observations?.overdue?.historicalRed||0} con +7 días)`];
     const newObs=[...(result.observations?.created||[]),...(result.observations?.overdue?.created||[])];
     if(newObs.length){lines.push('','🆕 NUEVOS CASOS');for(const o of newObs.slice(0,10))lines.push(`${o.severity==='RED'?'🔴':'⚠️'} ${o.reason}\nEsperado: ${o.expected}\n${o.hubUrl||''}`.trim())}
     const changes=[...(result.observations?.corrected||[]),...(result.observations?.overdue?.corrected||[])];
@@ -165,7 +207,7 @@ class LiveDailySupervisor{
     const fails=result.observations?.notCorrected||[];
     if(fails.length){lines.push('','❌ NO CORREGIDAS / REINCIDENCIAS');for(const o of fails.slice(0,10))lines.push(`• ${o.reason}\n${o.hubUrl||''}`.trim())}
     if(red.length){lines.push('','🚨 ALERTA ROJA +7 DÍAS');for(const o of red.slice(0,10))lines.push(`• ${o.reason}\n${o.hubUrl||`Deal ${o.dealId}`}`)}
-    return{summary:{...totals,pending:pending.length,corrected:corrected.length,notCorrected:notCorrected.length,redOverdue:red.length},text:lines.join('\n')};
+    return{summary:{...totals,pending:pending.length,corrected:corrected.length,notCorrected:notCorrected.length,redOverdue:red.length,recoveryBacklog:Number(result.observations?.overdue?.historicalOpen||0),recoveryBacklogRed:Number(result.observations?.overdue?.historicalRed||0)},text:lines.join('\n')};
   }
 }
 

@@ -1,4 +1,4 @@
-class SupervisorStore{constructor(db){this.db=db;this.c={conversations:'supervisor_v3_conversation_state',deals:'supervisor_v3_deal_state',hunter:'supervisor_v3_hunter_event_state',checkpoints:'supervisor_v3_checkpoints',runs:'supervisor_v3_runs',events:'supervisor_v3_events',reports:'supervisor_v3_reports',dailyReports:'supervisor_v3_daily_reports',dailyJobs:'supervisor_v3_daily_jobs',dailyItems:'supervisor_v3_daily_items',dailyReviews:'supervisor_v3_daily_reviews',remoteSupervisors:'supervisor_v3_remote_supervisors',supervisionActions:'supervisor_v3_supervision_actions',remoteReports:'supervisor_v3_remote_reports',remoteCheckpoints:'supervisor_v3_remote_checkpoints',liveDailyCases:'supervisor_v3_live_daily_cases',liveDailyObservations:'supervisor_v3_live_daily_observations',liveDailyReports:'supervisor_v3_live_daily_reports'}}
+class SupervisorStore{constructor(db){this.db=db;this.c={conversations:'supervisor_v3_conversation_state',deals:'supervisor_v3_deal_state',hunter:'supervisor_v3_hunter_event_state',checkpoints:'supervisor_v3_checkpoints',runs:'supervisor_v3_runs',events:'supervisor_v3_events',reports:'supervisor_v3_reports',dailyReports:'supervisor_v3_daily_reports',dailyJobs:'supervisor_v3_daily_jobs',dailyItems:'supervisor_v3_daily_items',dailyReviews:'supervisor_v3_daily_reviews',remoteSupervisors:'supervisor_v3_remote_supervisors',supervisionActions:'supervisor_v3_supervision_actions',remoteReports:'supervisor_v3_remote_reports',remoteCheckpoints:'supervisor_v3_remote_checkpoints',liveDailyCases:'supervisor_v3_live_daily_cases',liveDailyObservations:'supervisor_v3_live_daily_observations',liveDailyReports:'supervisor_v3_live_daily_reports',liveDailyBaselines:'supervisor_v3_live_daily_baselines'}}
 async getCheckpoint(id){const d=await this.db.collection(this.c.checkpoints).doc(id).get();return d.exists?d.data():null}async saveCheckpoint(id,data){await this.db.collection(this.c.checkpoints).doc(id).set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async getConversationState(id){const d=await this.db.collection(this.c.conversations).doc(String(id)).get();return d.exists?{id:d.id,...d.data()}:null}async saveConversationState(id,data){await this.db.collection(this.c.conversations).doc(String(id)).set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async listWaiting(limit=500){const s=await this.db.collection(this.c.conversations).where('currentWaiting','==',true).limit(limit).get();return s.docs.map(d=>({id:d.id,...d.data()}))}async listPending(limit=500){const rows=await this.listWaiting(limit);return rows.filter(x=>x.metrics?.pendingAssignment)}async listConversationStates(limit=5000){const s=await this.db.collection(this.c.conversations).limit(limit).get();return s.docs.map(d=>({id:d.id,...d.data()}))}
@@ -63,6 +63,15 @@ async listLiveDailyObservationsForSellers(sellerKeys=[],limit=2000){
   const s=await this.db.collection(this.c.liveDailyObservations).limit(limit).get();
   return s.docs.map(d=>({id:d.id,...d.data()})).filter(x=>!wanted.size||wanted.has(String(x.sellerKey||'').toLowerCase())).sort((a,b)=>String(b.openedAt||'').localeCompare(String(a.openedAt||'')));
 }
+
+async getLiveDailyBaseline(supervisorId){
+  const d=await this.db.collection(this.c.liveDailyBaselines).doc(String(supervisorId)).get();
+  return d.exists?{id:d.id,...d.data()}:null;
+}
+async saveLiveDailyBaseline(supervisorId,data){
+  await this.db.collection(this.c.liveDailyBaselines).doc(String(supervisorId)).set({...data,supervisorId:String(supervisorId),updatedAt:new Date().toISOString()},{merge:true});
+}
+
 async saveLiveDailyReport(id,data){
   await this.db.collection(this.c.liveDailyReports).doc(String(id)).set({...data,id:String(id),updatedAt:new Date().toISOString()},{merge:true});
 }

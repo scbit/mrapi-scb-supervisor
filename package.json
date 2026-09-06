@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.11.1",
+  "version": "0.11.2",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Daily Gerencial logic in live weekday supervision with persistent case verification",
+  "description": "SUPERVISOR SCB V3 - Live Daily supervision with historical overdue baseline isolation",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

@@ -305,15 +305,15 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     }
     const last=await this.store.getRemoteCheckpoint(`last_send_${cfg.id}`);if(!force&&last?.at&&now.getTime()-new Date(last.at).getTime()<cfg.frequencyMinutes*60000)return{skipped:true,reason:'frequency_not_due'};
     const setup=await this.getNetworkSetup(),liveCfg=setup.settings.liveDaily||{enabled:true,deliveryMode:'DRY_RUN'};if(liveCfg.enabled===false)return{skipped:true,reason:'live_daily_disabled'};
-    const analysis=await this.liveDaily.analyzeSellerGroup(cfg,{now,activeDeals}),built=this.liveDaily.buildTelegramReport(cfg,analysis,{now,deliveryMode:liveCfg.deliveryMode||'DRY_RUN'});
+    const analysis=await this.liveDaily.analyzeSellerGroup(cfg,{now,activeDeals,dateOverride}),built=this.liveDaily.buildTelegramReport(cfg,analysis,{now,deliveryMode:liveCfg.deliveryMode||'DRY_RUN'});
     const report={id:id('live_daily_report'),supervisorId:cfg.id,date:analysis.date,mode:'weekday_live_daily',generatedAt:now.toISOString(),summary:built.summary,text:built.text};await this.store.saveLiveDailyReport(report.id,report);
     const canSend=send&&(liveCfg.deliveryMode||'DRY_RUN')==='ACTIVE';let sent=null;if(canSend&&cfg.telegramChatId){sent=await this.telegram.send(report.text,cfg.telegramChatId);await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id})}else if(!last?.at||force)await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id,dryRun:true});
     return{skipped:false,mode:'weekday_live_daily',deliveryMode:liveCfg.deliveryMode||'DRY_RUN',analysis:{date:analysis.date,changedCases:analysis.changedCases.length,newObservations:analysis.observations.created.length+analysis.observations.overdue.created.length},report,sent};
   }
-  async testSellerGroup(sellerId,{send=false}={}){
+  async testSellerGroup(sellerId,{send=false,dateOverride=null}={}){
     const supervisorDocId='seller_group__'+Buffer.from(String(sellerId)).toString('base64url').slice(0,160),cfg=await this.store.getRemoteSupervisor(supervisorDocId);if(!cfg)throw new Error('SELLER_GROUP_NOT_CONFIGURED');
     const now=new Date(),setup=await this.getNetworkSetup(),liveCfg=setup.settings.liveDaily||{enabled:true,deliveryMode:'DRY_RUN'},activeDeals=await this.store.listActiveDeals(20000);
-    const analysis=await this.liveDaily.analyzeSellerGroup(cfg,{now,activeDeals}),built=this.liveDaily.buildTelegramReport(cfg,analysis,{now,deliveryMode:liveCfg.deliveryMode||'DRY_RUN'});
+    const analysis=await this.liveDaily.analyzeSellerGroup(cfg,{now,activeDeals,dateOverride}),built=this.liveDaily.buildTelegramReport(cfg,analysis,{now,deliveryMode:liveCfg.deliveryMode||'DRY_RUN'});
     const report={id:id('live_daily_report'),supervisorId:cfg.id,date:analysis.date,mode:'weekday_live_daily',generatedAt:now.toISOString(),summary:built.summary,text:built.text};await this.store.saveLiveDailyReport(report.id,report);
     let sent=null;if(send&&(liveCfg.deliveryMode||'DRY_RUN')==='ACTIVE'){if(!cfg.telegramChatId)throw new Error('SELLER_GROUP_TELEGRAM_CHAT_REQUIRED');sent=await this.telegram.send(report.text,cfg.telegramChatId)}
     return{deliveryMode:liveCfg.deliveryMode||'DRY_RUN',analysis:{date:analysis.date,changedCases:analysis.changedCases.length,newObservations:analysis.observations.created.length+analysis.observations.overdue.created.length},report,sent};
