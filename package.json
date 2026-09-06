@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.11.2",
+  "version": "0.11.3",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Live Daily supervision with historical overdue baseline isolation",
+  "description": "SUPERVISOR SCB V3 - Live Daily historical test date + legacy overdue cleanup",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

@@ -132,6 +132,22 @@ class LiveDailySupervisor{
 
     const historicalIds=new Set(Object.keys(baseline.historicalOverdue||{}));
     const existing=await this.store.listLiveDailyObservationsForSellers(sellerKeys,2000);
+
+    // One-time cleanup of observations created by 0.11.0/0.11.1 before the baseline existed.
+    // They represent the same historical Recovery backlog and must not remain as live Supervisor pendings.
+    for(const o of existing){
+      if(o.source==='CRM_DUE_DATE'&&o.supervisorId===cfg.id&&historicalIds.has(String(o.dealId))&&!o.historicalBaseline){
+        await this.store.saveLiveDailyObservation(o.id,{
+          status:'BASELINED',
+          historicalBaseline:true,
+          baselinedAt:now.toISOString(),
+          baselineReason:'Historical overdue backlog delegated to Recovery'
+        });
+        o.status='BASELINED';
+        o.historicalBaseline=true;
+      }
+    }
+
     const open=existing.filter(o=>o.source==='CRM_DUE_DATE'&&OPEN_STATUSES.has(o.status)&&o.supervisorId===cfg.id&&!o.historicalBaseline);
     const seen=new Set(),created=[],updated=[],corrected=[];
     let historicalOpen=0,historicalRed=0;
@@ -193,7 +209,7 @@ class LiveDailySupervisor{
   }
 
   buildTelegramReport(cfg,result,{now=new Date(),deliveryMode='DRY_RUN'}={}){
-    const rows=result.cases||[],obs=(result.allObservations||[]).filter(o=>o.supervisorId===cfg.id),day=result.date;
+    const rows=result.cases||[],obs=(result.allObservations||[]).filter(o=>o.supervisorId===cfg.id&&!o.historicalBaseline&&o.status!=='BASELINED'),day=result.date;
     const pending=obs.filter(o=>OPEN_STATUSES.has(o.status)),corrected=obs.filter(o=>o.status==='CORRECTED'&&String(o.correctedAt||'').startsWith(day)),notCorrected=obs.filter(o=>o.status==='NOT_CORRECTED');
     const red=pending.filter(o=>o.issueType==='OVERDUE_DEAL'&&o.severity==='RED');
     const s=result.bySeller||[];
