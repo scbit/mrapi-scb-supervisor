@@ -76,3 +76,12 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - KPI de cumplimiento por vendedor y memoria de reincidencias por tipo.
 - Endpoint `POST /api/supervisor/remote/tick` para que un scheduler externo ejecute la frecuencia configurada. La infraestructura/scheduler NO se crea automáticamente en esta versión.
 - CRM (`bscrmscb`), Bandeja (`bsscb`) y Hunter (`scb-hunter-bd`) continúan estrictamente READ ONLY.
+
+
+## v0.11.7 Automation Safety Layer
+- `/api/supervisor/remote/tick` ahora pasa por lock anti-solapamiento y circuit breaker.
+- Health: `GET /api/supervisor/automation/health`.
+- Pausa manual: `POST /api/supervisor/automation/pause`.
+- Reanudar: `POST /api/supervisor/automation/resume`.
+- Límites por tick y estado se guardan solo en la BD propia `supervisor-scb`.
+- Si alcanza un límite o timeout lógico, se pausa antes de enviar Telegram.

@@ -7,7 +7,7 @@
 </style>
 </head>
 <body><div class="wrap">
-<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.11.6</p></div><div class="badge">FUENTES READ ONLY</div></header>
+<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.11.7</p></div><div class="badge">FUENTES READ ONLY</div></header>
 <div class="grid">
 <section class="card span12"><h2>Acceso</h2><div class="row"><input id="token" type="password" placeholder="Pegá SUPERVISOR_API_TOKEN acá"><button onclick="saveToken()">Guardar token</button><button onclick="clearToken()">Borrar</button></div><div class="hint">El token queda solamente en este navegador y se usa como header del Supervisor.</div></section>
 
@@ -114,6 +114,17 @@
       </select>
     </div>
     <div class="hint">El reporte usa la lógica del Reporte Diario Gerencial V3 sobre el acumulado completo del día. La lectura de Bandeja/CRM sigue siendo incremental; cada chat se reanaliza solo cuando cambia.</div>
+    <div class="divider" style="margin:14px 0"></div>
+    <div class="fieldTitle">Seguridad de automatización</div>
+    <div id="automationHealth" class="hint">Estado: cargando…</div>
+    <div class="row" style="margin-top:10px;flex-wrap:wrap">
+      <button onclick="refreshAutomationHealth()">Actualizar estado</button>
+      <button onclick="pauseAutomation()">⏸ Pausar</button>
+      <button onclick="resumeAutomation()">▶ Reanudar</button>
+      <button onclick="runAutomationNow()">Ejecutar ahora</button>
+    </div>
+    <div class="hint" style="margin-top:8px">Fail-closed: lock anti-solapamiento, límites por tick, timeout lógico y pausa automática luego de 3 fallas consecutivas. Si se pausa por seguridad, no envía nuevos reportes hasta reanudar.</div>
+
   </div>
 
   <div class="span6 fieldCard">
@@ -245,12 +256,39 @@ function sellerRowsPayload(){
   return Array.from(document.querySelectorAll('#sellerGroupRows tr[data-seller]')).map(tr=>{const id=tr.dataset.seller,s=(window.__crmSellers||[]).find(x=>String(x.id)===String(id));return{sellerId:id,sellerLabel:s?.label||id,telegramChatId:(tr.querySelector('.sellerChatManual')?.value||tr.querySelector('.sellerChat')?.value||'').trim()||null,enabled:tr.querySelector('.sellerEnabled')?.checked!==false}});
 }
 async function saveSupervisionNetwork(){
-  const body={settings:{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:coachingEnabled.checked,deliveryMode:liveDeliveryMode.value||'DRY_RUN'},weekday:{days:checkedValues('.weekdayCb'),startTime:wdStart.value||'09:00',endTime:wdEnd.value||'17:00',pauseStart:wdPauseStart.value||'12:00',pauseEnd:wdPauseEnd.value||'13:00',sellerFrequencyMinutes:Number(sellerFrequency.value||30),generalFrequencyMinutes:Number(generalFrequency.value||60),generalChatId:(generalChatManual.value||generalChat.value||'').trim()||null,generalDays:checkedValues('.generalDayCb'),generalStartTime:generalStart.value||'09:00',generalEndTime:generalEnd.value||'17:00'},weekend:{days:checkedValues('.weekendCb'),startTime:weekendStart.value||'09:00',endTime:weekendEnd.value||'24:00',frequencyMinutes:Number(weekendFrequency.value||120),chatId:(weekendChatManual.value||weekendChat.value||'').trim()||null,minimumSignal:weekendSignal.value||'MUY_INTERESANTE',sendStats:true,alertImportant:true}},sellerGroups:sellerRowsPayload()};
+  const body={settings:{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:coachingEnabled.checked,deliveryMode:liveDeliveryMode.value||'DRY_RUN',safety:(window.__networkSettings?.liveDaily?.safety||{})},weekday:{days:checkedValues('.weekdayCb'),startTime:wdStart.value||'09:00',endTime:wdEnd.value||'17:00',pauseStart:wdPauseStart.value||'12:00',pauseEnd:wdPauseEnd.value||'13:00',sellerFrequencyMinutes:Number(sellerFrequency.value||30),generalFrequencyMinutes:Number(generalFrequency.value||60),generalChatId:(generalChatManual.value||generalChat.value||'').trim()||null,generalDays:checkedValues('.generalDayCb'),generalStartTime:generalStart.value||'09:00',generalEndTime:generalEnd.value||'17:00'},weekend:{days:checkedValues('.weekendCb'),startTime:weekendStart.value||'09:00',endTime:weekendEnd.value||'24:00',frequencyMinutes:Number(weekendFrequency.value||120),chatId:(weekendChatManual.value||weekendChat.value||'').trim()||null,minimumSignal:weekendSignal.value||'MUY_INTERESANTE',sendStats:true,alertImportant:true}},sellerGroups:sellerRowsPayload()};
   await request('/api/supervisor/network/setup',{method:'POST',headers:headers(true),body:JSON.stringify(body)});alert('Red de supervisión guardada.');await loadSupervisionNetwork();
 }
 async function testSellerGroup(sellerId,btn){const send=confirm('¿Enviar la prueba al grupo Telegram configurado para este vendedor?\\nCancelar = solo generar/mostrar.');const date=(liveTestDate?.value||'').trim()||null;const d=await request('/api/supervisor/network/test-seller',{method:'POST',headers:headers(true),body:JSON.stringify({sellerId,send,date})});if(d.result?.report)setReport(d.result.report);if(send&&d.result?.sent)alert('Prueba enviada al grupo del vendedor.')}
 async function testGeneral(send){const chatId=(generalChatManual?.value||generalChat?.value||'').trim();if(send&&!chatId){alert('Elegí o pegá el Chat ID del grupo general.');return}const d=await request('/api/supervisor/network/test-general',{method:'POST',headers:headers(true),body:JSON.stringify({send,chatId})});if(d.result?.report)setReport(d.result.report);if(send)alert('Resumen general enviado.')}
 async function testWeekend(send){const chatId=(weekendChatManual?.value||weekendChat?.value||'').trim();if(send&&!chatId){alert('Elegí o pegá el Chat ID del grupo de guardia.');return}const d=await request('/api/supervisor/network/test-weekend',{method:'POST',headers:headers(true),body:JSON.stringify({send,chatId})});if(d.result?.report)setReport(d.result.report);if(send)alert('Guardia enviada.')}
+
+function renderAutomationHealth(h){
+  if(!automationHealth)return;
+  if(!h){automationHealth.textContent='Estado: no disponible';return}
+  const core=h.lastCore||{};
+  automationHealth.innerHTML=`<b>Estado: ${esc(h.status||'-')}</b>${h.paused?` · Motivo: ${esc(h.pauseReason||'-')}`:''}<br>`+
+    `Último tick: ${esc(h.lastTickAt||'-')} · Último OK: ${esc(h.lastSuccessAt||'-')} · Duración: ${h.lastDurationMs==null?'-':Math.round(h.lastDurationMs/1000)+' s'}<br>`+
+    `Última lectura: conversaciones ${esc(core.processedConversations??'-')} · tratos ${esc(core.processedDeals??'-')} · Hunter ${esc(core.processedHunterEvents??'-')} · fallas seguidas ${esc(h.consecutiveFailures??0)}`+
+    `${h.lastError?`<br><span style="color:#a33">Último error: ${esc(h.lastError)}</span>`:''}`;
+}
+async function refreshAutomationHealth(){
+  const d=await request('/api/supervisor/automation/health',{headers:headers()});renderAutomationHealth(d.health);return d.health;
+}
+async function pauseAutomation(){
+  if(!confirm('¿Pausar la automatización del Supervisor?'))return;
+  const d=await request('/api/supervisor/automation/pause',{method:'POST',headers:headers(true),body:JSON.stringify({reason:'MANUAL_UI'})});renderAutomationHealth(d.health);
+}
+async function resumeAutomation(){
+  if(!confirm('¿Reanudar la automatización y limpiar el contador de fallas?'))return;
+  const d=await request('/api/supervisor/automation/resume',{method:'POST',headers:headers(true),body:'{}'});renderAutomationHealth(d.health);
+}
+async function runAutomationNow(){
+  const active=(liveDeliveryMode?.value||'DRY_RUN')==='ACTIVE';
+  const send=active?confirm('MODO ACTIVO: esta ejecución puede enviar Telegram si corresponde por frecuencia/horario. ¿Continuar?'):false;
+  const d=await request('/api/supervisor/remote/tick',{method:'POST',headers:headers(true),body:JSON.stringify({send,force:false})});
+  if(d.health)renderAutomationHealth(d.health);show(d);
+}
 async function verifyRemoteActions(){const d=await request('/api/supervisor/remote/verify',{method:'POST',headers:headers(true),body:JSON.stringify({limit:100})});show(d)}
-health().then(()=>integrationStatus()).then(()=>loadSupervisionNetwork()).then(()=>loadDailyTelegramGroups()).catch(()=>{});
+health().then(()=>integrationStatus()).then(()=>loadSupervisionNetwork()).then(()=>refreshAutomationHealth()).then(()=>loadDailyTelegramGroups()).catch(()=>{});
 </script></body></html>

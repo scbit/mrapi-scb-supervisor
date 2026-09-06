@@ -88,5 +88,26 @@ async listLatestLiveDailyReports(limit=1000){
 async saveSupervisionSettings(data){await this.db.collection('supervisor_v3_supervision_settings').doc('global').set({...data,updatedAt:new Date().toISOString()},{merge:true})}
 async getSupervisionSettings(){const d=await this.db.collection('supervisor_v3_supervision_settings').doc('global').get();return d.exists?{id:d.id,...d.data()}:null}
 
+
+async acquireRemoteLock(id,{owner,now=new Date(),ttlMs=15*60*1000}={}){
+  const ref=this.db.collection(this.c.remoteCheckpoints).doc(String(id));
+  const nowMs=now instanceof Date?now.getTime():new Date(now).getTime();
+  return await this.db.runTransaction(async tx=>{
+    const d=await tx.get(ref),cur=d.exists?d.data():null,expires=cur?.expiresAt?new Date(cur.expiresAt).getTime():0;
+    if(cur?.locked===true&&expires>nowMs)return{acquired:false,current:cur};
+    const row={locked:true,owner:String(owner||''),acquiredAt:new Date(nowMs).toISOString(),expiresAt:new Date(nowMs+ttlMs).toISOString(),updatedAt:new Date().toISOString()};
+    tx.set(ref,row,{merge:true});
+    return{acquired:true,current:row};
+  });
+}
+async releaseRemoteLock(id,{owner,now=new Date()}={}){
+  const ref=this.db.collection(this.c.remoteCheckpoints).doc(String(id));
+  await this.db.runTransaction(async tx=>{
+    const d=await tx.get(ref);if(!d.exists)return;
+    const cur=d.data();if(owner&&cur?.owner&&String(cur.owner)!==String(owner))return;
+    tx.set(ref,{locked:false,releasedAt:(now instanceof Date?now:new Date(now)).toISOString(),updatedAt:new Date().toISOString()},{merge:true});
+  });
+}
+
 }
 module.exports={SupervisorStore};

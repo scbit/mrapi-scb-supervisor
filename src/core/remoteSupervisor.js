@@ -91,19 +91,19 @@ class RemoteSupervisorService{
   }
 
   defaultNetworkSettings(){
-    return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:true,deliveryMode:'DRY_RUN'},
+    return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:true,deliveryMode:'DRY_RUN',safety:{maxConversationsPerTick:250,maxDealsPerTick:2000,maxHunterEventsPerTick:5000,maxTelegramPerTick:25,maxTickSeconds:180,maxConsecutiveFailures:3,lockMinutes:15}},
       weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:30,generalFrequencyMinutes:60,generalChatId:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
       weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
     };
   }
   async getNetworkSetup(){
-    const defaults=this.defaultNetworkSettings(),saved=await this.store.getSupervisionSettings()||{},settings={...defaults,...saved,coaching:{...defaults.coaching,...(saved.coaching||{})},liveDaily:{...defaults.liveDaily,...(saved.liveDaily||{})},weekday:{...defaults.weekday,...(saved.weekday||{})},weekend:{...defaults.weekend,...(saved.weekend||{})}};
+    const defaults=this.defaultNetworkSettings(),saved=await this.store.getSupervisionSettings()||{},settings={...defaults,...saved,coaching:{...defaults.coaching,...(saved.coaching||{})},liveDaily:{...defaults.liveDaily,...(saved.liveDaily||{}),safety:{...defaults.liveDaily.safety,...(saved.liveDaily?.safety||{})}},weekday:{...defaults.weekday,...(saved.weekday||{})},weekend:{...defaults.weekend,...(saved.weekend||{})}};
     const supervisors=(await this.listSupervisors()).filter(x=>x.mode==='SELLER_GROUP');
     return{settings,sellers:await this.listSellerOptions(),sellerGroups:supervisors};
   }
   async saveNetworkSetup(input={}){
     const base=this.defaultNetworkSettings(),old=await this.store.getSupervisionSettings()||{},raw=input.settings||{};
-    const settings={...base,...old,...raw,coaching:{...base.coaching,...(old.coaching||{}),...(raw.coaching||{})},liveDaily:{...base.liveDaily,...(old.liveDaily||{}),...(raw.liveDaily||{})},weekday:{...base.weekday,...(old.weekday||{}),...(raw.weekday||{})},weekend:{...base.weekend,...(old.weekend||{}),...(raw.weekend||{})}};
+    const settings={...base,...old,...raw,coaching:{...base.coaching,...(old.coaching||{}),...(raw.coaching||{})},liveDaily:{...base.liveDaily,...(old.liveDaily||{}),...(raw.liveDaily||{}),safety:{...base.liveDaily.safety,...(old.liveDaily?.safety||{}),...(raw.liveDaily?.safety||{})}},weekday:{...base.weekday,...(old.weekday||{}),...(raw.weekday||{})},weekend:{...base.weekend,...(old.weekend||{}),...(raw.weekend||{})}};
     await this.store.saveSupervisionSettings(settings);
     const results=[];
     for(const row of input.sellerGroups||[]){
@@ -340,6 +340,98 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     }else results.push({general:true,skipped:true,reason:'general_outside_schedule'});
     return{at:now.toISOString(),mode:'weekday',results};
   }
+
+  async getAutomationHealth(){
+    const setup=await this.getNetworkSetup(),control=await this.store.getRemoteCheckpoint('automation_control')||{},health=await this.store.getRemoteCheckpoint('automation_health')||{},lock=await this.store.getRemoteCheckpoint('automation_tick_lock')||{};
+    const safety=setup.settings.liveDaily?.safety||{};
+    const paused=control.paused===true||health.autoPaused===true;
+    return{
+      status:paused?'PAUSED':health.running===true?'RUNNING':health.lastError?'ERROR':'OK',
+      paused,
+      pauseReason:control.paused===true?(control.reason||'MANUAL'):health.autoPaused===true?(health.pauseReason||'AUTO_PAUSED'):null,
+      deliveryMode:setup.settings.liveDaily?.deliveryMode||'DRY_RUN',
+      sellerFrequencyMinutes:Number(setup.settings.weekday?.sellerFrequencyMinutes||30),
+      limits:safety,
+      lastTickAt:health.lastTickAt||null,
+      lastSuccessAt:health.lastSuccessAt||null,
+      lastDurationMs:health.lastDurationMs??null,
+      lastError:health.lastError||null,
+      consecutiveFailures:Number(health.consecutiveFailures||0),
+      lastCore:health.lastCore||null,
+      lastResultSummary:health.lastResultSummary||null,
+      lock:lock.locked===true&&(!lock.expiresAt||new Date(lock.expiresAt)>new Date())?{locked:true,owner:lock.owner||null,acquiredAt:lock.acquiredAt||null,expiresAt:lock.expiresAt||null}:{locked:false}
+    };
+  }
+  async pauseAutomation(reason='MANUAL_PAUSE'){
+    await this.store.saveRemoteCheckpoint('automation_control',{paused:true,reason:String(reason||'MANUAL_PAUSE'),pausedAt:new Date().toISOString()});
+    return this.getAutomationHealth();
+  }
+  async resumeAutomation(){
+    await this.store.saveRemoteCheckpoint('automation_control',{paused:false,reason:null,resumedAt:new Date().toISOString()});
+    await this.store.saveRemoteCheckpoint('automation_health',{autoPaused:false,pauseReason:null,consecutiveFailures:0,lastError:null});
+    return this.getAutomationHealth();
+  }
+  async automationTick({engine,now=new Date(),send=true,force=false}={}){
+    if(!engine)throw new Error('SUPERVISOR_ENGINE_REQUIRED');
+    const setup=await this.getNetworkSetup(),safety=setup.settings.liveDaily?.safety||{},control=await this.store.getRemoteCheckpoint('automation_control')||{},prior=await this.store.getRemoteCheckpoint('automation_health')||{};
+    if((control.paused===true||prior.autoPaused===true)&&!force)return{skipped:true,reason:'AUTOMATION_PAUSED',health:await this.getAutomationHealth()};
+
+    const enabledGroups=setup.sellerGroups.filter(x=>x.enabled!==false).length;
+    const maxTelegram=Number(safety.maxTelegramPerTick||25);
+    if(enabledGroups+1>maxTelegram&&!force){
+      await this.store.saveRemoteCheckpoint('automation_health',{autoPaused:true,pauseReason:'TELEGRAM_BUDGET_EXCEEDED',lastError:`Configured destinations ${enabledGroups+1} exceed max ${maxTelegram}`,lastTickAt:now.toISOString()});
+      return{skipped:true,reason:'TELEGRAM_BUDGET_EXCEEDED',health:await this.getAutomationHealth()};
+    }
+
+    const owner=`tick_${Date.now()}_${Math.random().toString(36).slice(2,8)}`,ttlMs=Number(safety.lockMinutes||15)*60000;
+    const lock=await this.store.acquireRemoteLock('automation_tick_lock',{owner,now,ttlMs});
+    if(!lock.acquired)return{skipped:true,reason:'TICK_ALREADY_RUNNING',health:await this.getAutomationHealth()};
+
+    const started=Date.now();
+    await this.store.saveRemoteCheckpoint('automation_health',{running:true,lastTickAt:now.toISOString(),lastError:null});
+    try{
+      const core=await engine.run({now});
+      const elapsedCore=Date.now()-started;
+      const limits={
+        conversations:Number(safety.maxConversationsPerTick||250),
+        deals:Number(safety.maxDealsPerTick||2000),
+        hunter:Number(safety.maxHunterEventsPerTick||5000),
+        seconds:Number(safety.maxTickSeconds||180)
+      };
+      const hitConversationCap=Number(core.processedConversations||0)>=limits.conversations;
+      const hitDealCap=core.crmMode==='incremental'&&Number(core.processedDeals||0)>=limits.deals;
+      const hitHunterCap=Number(core.processedHunterEvents||0)>=limits.hunter;
+      const timedOut=elapsedCore>limits.seconds*1000;
+      if(hitConversationCap||hitDealCap||hitHunterCap||timedOut){
+        const reasons=[hitConversationCap?'CONVERSATION_READ_CAP':null,hitDealCap?'DEAL_READ_CAP':null,hitHunterCap?'HUNTER_READ_CAP':null,timedOut?'TICK_TIMEOUT':null].filter(Boolean);
+        await this.store.saveRemoteCheckpoint('automation_health',{
+          running:false,autoPaused:true,pauseReason:reasons.join('+'),lastError:`Safety stop: ${reasons.join(', ')}`,
+          lastDurationMs:Date.now()-started,lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode}
+        });
+        return{skipped:true,reason:'SAFETY_LIMIT_REACHED',reasons,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},health:await this.getAutomationHealth()};
+      }
+
+      const result=await this.tick({now,send});
+      const summary={mode:result.mode,results:Array.isArray(result.results)?result.results.length:0,errors:Array.isArray(result.results)?result.results.filter(x=>x?.error).length:0};
+      if(summary.errors>0)throw new Error(`REMOTE_TICK_PARTIAL_FAILURES:${summary.errors}`);
+      await this.store.saveRemoteCheckpoint('automation_health',{
+        running:false,autoPaused:false,pauseReason:null,lastSuccessAt:new Date().toISOString(),lastDurationMs:Date.now()-started,
+        consecutiveFailures:0,lastError:null,
+        lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},
+        lastResultSummary:summary
+      });
+      return{skipped:false,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},result,health:await this.getAutomationHealth()};
+    }catch(e){
+      const failures=Number(prior.consecutiveFailures||0)+1,maxFailures=Number(safety.maxConsecutiveFailures||3),autoPaused=failures>=maxFailures;
+      await this.store.saveRemoteCheckpoint('automation_health',{
+        running:false,consecutiveFailures:failures,autoPaused,pauseReason:autoPaused?'CIRCUIT_BREAKER':null,lastError:String(e.message||e),lastDurationMs:Date.now()-started,lastTickAt:now.toISOString()
+      });
+      const err=new Error(autoPaused?`AUTOMATION_PAUSED_AFTER_${failures}_FAILURES:${e.message}`:e.message);err.cause=e;throw err;
+    }finally{
+      await this.store.releaseRemoteLock('automation_tick_lock',{owner,now:new Date()}).catch(()=>{});
+    }
+  }
+
   async sellerCompliance(seller){const rows=await this.store.listSupervisionActionsForSeller(seller,500),verified=rows.filter(x=>x.status==='VERIFIED').length,failed=rows.filter(x=>x.status==='FAILED').length,total=verified+failed,byType={};for(const r of rows)byType[r.actionType]=(byType[r.actionType]||0)+1;return{seller,total,verified,failed,pending:rows.filter(x=>['PENDING','WAITING_FOR_ACTION'].includes(x.status)).length,compliancePct:total?Math.round(verified/total*100):null,byType}}
 }
 module.exports={RemoteSupervisorService,ACTION_TYPES,QUALITATIVE_TYPES,DEFAULT_RUBRICS,normalizeSupervisorConfig,withinSchedule,scheduleMode,signalRank};
