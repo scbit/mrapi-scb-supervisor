@@ -10,6 +10,12 @@
 .opsNav a{padding:9px 14px;border-radius:9px;background:#eef2f7;color:#111827;text-decoration:none;font-weight:700}
 .schedulerPill{display:inline-block;padding:4px 9px;border-radius:999px;font-size:12px;font-weight:800;background:#eef2f7}
 .schedulerPill.active{background:#dcfce7;color:#166534}.schedulerPill.late{background:#fef3c7;color:#92400e}.schedulerPill.off{background:#fee2e2;color:#991b1b}
+details.sellerAccordion{border:1px solid #e4e7ec;border-radius:12px;background:#fff;margin-top:12px}
+details.sellerAccordion>summary{cursor:pointer;padding:14px 16px;font-weight:800;list-style:none}
+details.sellerAccordion>summary::-webkit-details-marker{display:none}
+details.sellerAccordion>summary:after{content:'▾';float:right}
+details.sellerAccordion[open]>summary:after{content:'▴'}
+.dailyV3Box{background:#f8fafc;border:1px solid #d0d5dd;border-radius:12px;padding:14px}
 </style>
 </head>
 <body>
@@ -17,7 +23,7 @@
   <a href="/">Supervisor</a>
   <a href="/reports">Reportes e incidentes</a>
 </div><div class="wrap">
-<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.11.10</p></div><div class="badge">FUENTES READ ONLY</div></header>
+<header><div class="title"><h1>SUPERVISOR SCB V3</h1><p>Supervisor Diario Gerencial — v0.12.0</p></div><div class="badge">FUENTES READ ONLY</div></header>
 <div class="grid">
 <section class="card span12"><h2>Acceso</h2><div class="row"><input id="token" type="password" placeholder="Pegá SUPERVISOR_API_TOKEN acá"><button onclick="saveToken()">Guardar token</button><button onclick="clearToken()">Borrar</button></div><div class="hint">El token queda solamente en este navegador y se usa como header del Supervisor.</div></section>
 
@@ -58,6 +64,28 @@
 </section>
 
 
+
+<section class="card span12" id="dailyV3LiveCard">
+<h2>Supervisor Diario en Vivo · misma lógica Daily V3</h2>
+<div class="sectionHelp">Prueba manual del informe madre. Revisa todos los chats del vendedor del día seleccionado (09:00–17:00), usa la misma lógica Daily V3, muestra casos importantes con link HUB y permite comparar dos días para saber si el vendedor mejoró.</div>
+<div class="dailyV3Box">
+  <div class="row">
+    <select id="dailyV3Seller" style="min-width:320px"><option value="">— elegir vendedor —</option></select>
+    <input id="dailyV3Date" type="date">
+    <button class="primary" onclick="generateDailyV3Live()">Generar Daily V3 del día</button>
+  </div>
+  <div class="divider"></div>
+  <div class="fieldTitle">Comparar mejora entre dos días</div>
+  <div class="row">
+    <input id="dailyV3DateA" type="date">
+    <span>→</span>
+    <input id="dailyV3DateB" type="date">
+    <button onclick="compareDailyV3()">Comparar días</button>
+  </div>
+  <div class="hint">Ejemplo: jueves → viernes. Resultado: MEJORÓ / ESTABLE / EMPEORÓ, con cambios porcentuales de calidad, demora, falta de indagación y potencial no explorado.</div>
+  <pre id="dailyV3Output" style="margin-top:12px;max-height:700px"></pre>
+</div>
+</section>
 <section class="card span12" id="remoteSupervisorCard">
 <h2>5. Red de Supervisión Comercial</h2>
 <div class="sectionHelp">Un grupo Telegram por vendedor + un grupo general + una guardia única de fin de semana. Los vendedores se toman de CRM/HUB.</div>
@@ -71,8 +99,10 @@
   <div id="telegramChatsStatus" class="hint">Todavía no detectaste grupos.</div>
 </div>
 
-<div class="fieldCard" style="margin-top:12px">
-  <div class="fieldTitle">2. Un grupo por vendedor</div>
+<details class="sellerAccordion">
+  <summary>2. Un grupo por vendedor</summary>
+  <div class="fieldCard" style="margin:0;border:0">
+  <div class="fieldTitle">Configuración por vendedor</div>
   <input id="sellerSearch" placeholder="Buscar vendedor por nombre o email…" oninput="renderSellerRows()" style="width:100%;margin-bottom:10px">
   <div style="overflow:auto">
     <table class="sellerTable">
@@ -81,7 +111,7 @@
     </table>
   </div>
   <div class="hint">La configuración recomendada es un grupo por vendedor. El grupo puede tener a Facundo, al supervisor humano y al bot.</div>
-</div>
+</div></details>
 
 <div class="grid" style="margin-top:12px">
   <div class="span6 fieldCard">
@@ -261,7 +291,7 @@ async function loadSupervisionNetwork(){
   const wd=d.settings?.weekday||{},we=d.settings?.weekend||{},co=d.settings?.coaching||{},ld=d.settings?.liveDaily||{};
   setCheckedValues('.weekdayCb',wd.days||['Mon','Tue','Wed','Thu','Fri']);wdStart.value=wd.startTime||'09:00';wdEnd.value=wd.endTime||'17:00';wdPauseStart.value=wd.pauseStart||'12:00';wdPauseEnd.value=wd.pauseEnd||'13:00';sellerFrequency.value=String(wd.sellerFrequencyMinutes||30);generalFrequency.value=String(wd.generalFrequencyMinutes||60);setCheckedValues('.generalDayCb',wd.generalDays||wd.days||['Mon','Tue','Wed','Thu','Fri']);generalStart.value=wd.generalStartTime||wd.startTime||'09:00';generalEnd.value=wd.generalEndTime||wd.endTime||'17:00';
   setCheckedValues('.weekendCb',we.days||['Sat','Sun']);weekendStart.value=we.startTime||'09:00';weekendEnd.value=we.endTime||'24:00';weekendFrequency.value=String(we.frequencyMinutes||120);weekendSignal.value=we.minimumSignal||'MUY_INTERESANTE';
-  renderGlobalChatSelects();renderSellerRows();
+  renderGlobalChatSelects();renderSellerRows();populateDailyV3Sellers();
 }
 function sellerRowsPayload(){
   return Array.from(document.querySelectorAll('#sellerGroupRows tr[data-seller]')).map(tr=>{const id=tr.dataset.seller,s=(window.__crmSellers||[]).find(x=>String(x.id)===String(id));return{sellerId:id,sellerLabel:s?.label||id,telegramChatId:(tr.querySelector('.sellerChatManual')?.value||tr.querySelector('.sellerChat')?.value||'').trim()||null,enabled:tr.querySelector('.sellerEnabled')?.checked!==false}});
@@ -301,6 +331,27 @@ async function runAutomationNow(){
   const send=active?confirm('MODO ACTIVO: esta ejecución puede enviar Telegram si corresponde por frecuencia/horario. ¿Continuar?'):false;
   const d=await request('/api/supervisor/remote/tick',{method:'POST',headers:headers(true),body:JSON.stringify({send,force:false})});
   if(d.health)renderAutomationHealth(d.health);show(d);
+}
+
+function populateDailyV3Sellers(){
+  const sel=dailyV3Seller;if(!sel)return;
+  const current=sel.value,rows=(window.__crmSellers||[]);
+  sel.innerHTML='<option value="">— elegir vendedor —</option>'+rows.map(x=>`<option value="${esc(x.email||x.id||'')}">${esc(x.label||x.email||x.id||'')}</option>`).join('');
+  if(current)sel.value=current;
+}
+async function generateDailyV3Live(){
+  if(!dailyV3Seller.value||!dailyV3Date.value){alert('Elegí vendedor y fecha');return}
+  dailyV3Output.textContent='Generando Daily V3 completo del día…';
+  const opt=dailyV3Seller.options[dailyV3Seller.selectedIndex];
+  const d=await request('/api/supervisor/daily-v3-live/generate',{method:'POST',headers:headers(true),body:JSON.stringify({sellerKey:dailyV3Seller.value,sellerLabel:opt?.textContent||dailyV3Seller.value,date:dailyV3Date.value})});
+  dailyV3Output.textContent=d.report?.text||JSON.stringify(d,null,2);
+}
+async function compareDailyV3(){
+  if(!dailyV3Seller.value||!dailyV3DateA.value||!dailyV3DateB.value){alert('Elegí vendedor y las dos fechas');return}
+  dailyV3Output.textContent='Comparando días con la misma lógica Daily V3…';
+  const opt=dailyV3Seller.options[dailyV3Seller.selectedIndex];
+  const d=await request('/api/supervisor/daily-v3-live/compare',{method:'POST',headers:headers(true),body:JSON.stringify({sellerKey:dailyV3Seller.value,sellerLabel:opt?.textContent||dailyV3Seller.value,dateA:dailyV3DateA.value,dateB:dailyV3DateB.value})});
+  dailyV3Output.textContent=d.report?.text||JSON.stringify(d,null,2);
 }
 async function verifyRemoteActions(){const d=await request('/api/supervisor/remote/verify',{method:'POST',headers:headers(true),body:JSON.stringify({limit:100})});show(d)}
 health().then(()=>integrationStatus()).then(()=>loadSupervisionNetwork()).then(()=>refreshAutomationHealth()).then(()=>loadDailyTelegramGroups()).catch(()=>{});

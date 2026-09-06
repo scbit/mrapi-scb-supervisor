@@ -16,7 +16,7 @@ function communicationCheckpoint(channel,result,error=null){
   return{channel,ok:!error,result:result||null,error:error?String(error.message||error):null,at:new Date().toISOString()};
 }
 function dailySubject(report){return `SUPERVISOR SCB — Cierre Gerencial ${report?.date||''}`.trim()}
-function createApp({engine,dailyService,remoteService,databases,config,telegramAdapter,emailAdapter,bucketAdapter}){
+function createApp({engine,dailyService,dailyV3LiveService,remoteService,databases,config,telegramAdapter,emailAdapter,bucketAdapter}){
   const app=express();app.use(express.json({limit:'1mb'}));
   const auth=requireCoreAuth(process.env);
   const telegram=telegramAdapter||new TelegramAdapter(process.env);
@@ -86,6 +86,8 @@ function createApp({engine,dailyService,remoteService,databases,config,telegramA
   app.get('/api/supervisor/automation/health',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.getAutomationHealth()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/pause',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.pauseAutomation(q.body?.reason||'MANUAL_PAUSE')})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/resume',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.resumeAutomation()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
+  app.post('/api/supervisor/daily-v3-live/generate',auth,async(q,r)=>{try{if(!dailyV3LiveService)throw new Error('DAILY_V3_LIVE_NOT_AVAILABLE');const report=await dailyV3LiveService.generateSeller({date:String(q.body?.date||''),sellerKey:String(q.body?.sellerKey||''),sellerLabel:q.body?.sellerLabel||null,force:q.body?.force===true});r.json({ok:true,report})}catch(e){r.status(500).json({ok:false,error:e.message})}});
+  app.post('/api/supervisor/daily-v3-live/compare',auth,async(q,r)=>{try{if(!dailyV3LiveService)throw new Error('DAILY_V3_LIVE_NOT_AVAILABLE');const report=await dailyV3LiveService.compare({dateA:String(q.body?.dateA||''),dateB:String(q.body?.dateB||''),sellerKey:String(q.body?.sellerKey||''),sellerLabel:q.body?.sellerLabel||null,force:q.body?.force===true});r.json({ok:true,report})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.get('/api/supervisor/archive/reports',auth,async(q,r)=>{try{r.json({ok:true,reports:await engine.store.listLiveDailyReports(q.query?.limit||200,q.query?.date||null)})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.get('/api/supervisor/archive/incidents',auth,async(q,r)=>{try{r.json({ok:true,incidents:await engine.store.listCriticalIncidents(q.query?.limit||200,q.query?.status||null)})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.get('/api/supervisor/remote/report',auth,async(q,r)=>{try{const supervisorId=String(q.query?.supervisorId||'').trim();if(!supervisorId)throw new Error('REMOTE_SUPERVISOR_ID_REQUIRED');r.json({ok:true,report:await engine.store.getLatestRemoteReport(supervisorId)})}catch(e){r.status(500).json({ok:false,error:e.message})}});

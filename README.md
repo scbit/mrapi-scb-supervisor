@@ -103,3 +103,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 ## v0.11.10 — Reports auth fix
 - `/reports` reutiliza el mismo `localStorage.supervisor_api_token` de la pantalla principal.
 - Ya no usa una clave distinta (`supervisorToken`) que provocaba 401/UNAUTHORIZED.
+
+## v0.12.0 — Daily V3 Live + comparación de mejora
+- Daily V3 vuelve a ser la lógica madre visible del Supervisor en vivo.
+- Prueba manual por vendedor y fecha: revisa todos los chats del día 09:00–17:00.
+- Casos importantes incluyen link directo al HUB.
+- Agrega seguimiento persistente de correcciones: PENDING / CORRECTED / NOT_CORRECTED.
+- Permite comparar dos días del mismo vendedor y devuelve MEJORO / ESTABLE / EMPEORO.
+- La comparación normaliza por cantidad de clientes usando tasas de: buena respuesta comercial, demora, falta de indagación y potencial no explorado.
