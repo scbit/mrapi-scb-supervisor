@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.11.3",
+  "version": "0.11.5",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - Live Daily historical test date + legacy overdue cleanup",
+  "description": "SUPERVISOR SCB V3 - Multidimensional per-chat supervision rubric",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

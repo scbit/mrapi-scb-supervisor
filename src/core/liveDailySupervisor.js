@@ -27,6 +27,63 @@ function issueMap(row){
 }
 function observationKey(sellerKey,caseKey,issueType){return `${sellerKey}__${Buffer.from(String(caseKey)).toString('base64url').slice(0,120)}__${issueType}`}
 
+function buildCommercialCase(row){
+  const latestLate=(row.lateResponses||[]).at(-1);
+  const responseMinutes=latestLate?.minutes??null;
+
+  let responseTime={code:'OK',label:'A tiempo',level:'GOOD',minutes:responseMinutes};
+  if(row.noHumanResponse||row.botOnly) responseTime={code:'NO_HUMAN_RESPONSE',label:'Sin respuesta humana',level:'BAD',minutes:null};
+  else if(responseMinutes!==null&&responseMinutes>=60) responseTime={code:'VERY_LATE',label:`Muy tardía (${responseMinutes} min)`,level:'BAD',minutes:responseMinutes};
+  else if(responseMinutes!==null&&responseMinutes>=30) responseTime={code:'LATE',label:`Tardía (${responseMinutes} min)`,level:'WARN',minutes:responseMinutes};
+
+  let responseQuality={code:'GOOD',label:'Buena',level:'GOOD'};
+  if(row.needsReviewByAi) responseQuality={code:'REGULAR',label:'Regular',level:'WARN'};
+  if(row.operationalWithoutDiscovery&&row.unexploredPotential) responseQuality={code:'POOR',label:'Pobre',level:'BAD'};
+
+  let advisory={code:'GOOD',label:'Asesoró bien',level:'GOOD'};
+  if(row.operationalWithoutDiscovery) advisory={code:'PARTIAL',label:'Asesoramiento parcial',level:'WARN'};
+  if(row.operationalWithoutDiscovery&&row.unexploredPotential) advisory={code:'POOR',label:'Asesoramiento pobre',level:'BAD'};
+
+  let guidance={code:'GOOD',label:'Guió al cliente',level:'GOOD'};
+  if(row.unexploredPotential) guidance={code:'INSUFFICIENT',label:'Guía insuficiente',level:'BAD'};
+  else if(row.needsReviewByAi) guidance={code:'PARTIAL',label:'Guía parcial',level:'WARN'};
+
+  let opportunity={code:'DEVELOPED',label:'Oportunidad desarrollada',level:'GOOD'};
+  if(row.unexploredPotential) opportunity={code:'NOT_DEVELOPED',label:'Oportunidad no desarrollada',level:'BAD'};
+  else if(row.operationalWithoutDiscovery) opportunity={code:'PARTIAL',label:'Desarrollo parcial',level:'WARN'};
+
+  let followUp={code:'OK',label:'Seguimiento correcto',level:'GOOD'};
+  if(row.noHumanResponse||row.botOnly) followUp={code:'MISSING',label:'Falta seguimiento/respuesta humana',level:'BAD'};
+
+  const dimensions={responseTime,responseQuality,advisory,guidance,opportunity,followUp};
+  const bad=Object.values(dimensions).filter(x=>x.level==='BAD').length;
+  const warn=Object.values(dimensions).filter(x=>x.level==='WARN').length;
+  const verdict=bad?'A_CORREGIR':warn?'REVISAR':'BIEN_TRABAJADO';
+
+  const findings=[];
+  for(const [key,val] of Object.entries(dimensions)){
+    if(val.level!=='GOOD') findings.push({code:key.toUpperCase(),label:val.label,severity:val.level==='BAD'?'HIGH':'MEDIUM'});
+  }
+
+  let expected='Mantener la calidad actual y dejar siempre un siguiente paso concreto.';
+  if(advisory.level!=='GOOD'||guidance.level!=='GOOD'||opportunity.level!=='GOOD'){
+    expected='Aprovechar el contexto ya relevado por el bot/humano, asesorar activamente, orientar al cliente con opciones concretas, desarrollar oportunidades relacionadas y dejar un próximo paso claro. Evitar respuestas pasivas o limitarse a “avisame”.';
+  } else if(responseTime.level!=='GOOD'){
+    expected='Mejorar el tiempo de respuesta sin perder calidad comercial.';
+  } else if(followUp.level!=='GOOD'){
+    expected='Retomar el cliente y asegurar continuidad de seguimiento.';
+  }
+
+  return{
+    verdict,
+    quality:verdict,
+    dimensions,
+    findings,
+    severity:bad?'HIGH':warn?'MEDIUM':'LOW',
+    expected
+  };
+}
+
 class LiveDailySupervisor{
   constructor({store,inbox,crm,aiProvider}){this.store=store;this.inbox=inbox;this.crm=crm;this.ai=aiProvider}
 
@@ -78,34 +135,24 @@ class LiveDailySupervisor{
   }
 
   async reconcileConversationObservations(cfg,cases,{now,date}){
-    const sellerKeys=(cfg.sellers||[]).map(norm),existing=await this.store.listLiveDailyObservationsForSellers(sellerKeys,2000),byCase=new Map();
-    for(const o of existing.filter(o=>o.source==='DAILY_V3'&&OPEN_STATUSES.has(o.status))) {
-      const k=String(o.caseKey);if(!byCase.has(k))byCase.set(k,[]);byCase.get(k).push(o);
-    }
+    const sellerKeys=(cfg.sellers||[]).map(norm),existing=await this.store.listLiveDailyObservationsForSellers(sellerKeys,2000),openByCase=new Map();
+    for(const o of existing.filter(o=>o.source==='DAILY_V3'&&OPEN_STATUSES.has(o.status)&&o.supervisorId===cfg.id)) openByCase.set(String(o.caseKey),o);
     const created=[],corrected=[],notCorrected=[];
-
     for(const row of cases){
-      const caseKey=row.conversationId,issues=issueMap(row),open=byCase.get(String(caseKey))||[];
-      for(const [issueType,issue] of issues){
-        let obs=open.find(o=>o.issueType===issueType);
+      const caseKey=String(row.conversationId),commercial=buildCommercialCase(row); let obs=openByCase.get(caseKey);
+      if(commercial.quality!=='BIEN_TRABAJADO'){
         if(!obs){
-          obs={id:id('daily_obs'),source:'DAILY_V3',supervisorId:cfg.id,seller:row.seller||row.owner,sellerKey:norm(row.seller||row.owner),caseKey,conversationId:row.conversationId,dealId:row.dealId||null,issueType,severity:issue.severity,status:'PENDING',reason:issue.reason,expected:issue.expected,openedAt:now.toISOString(),lastSeenAt:now.toISOString(),lastHumanAtAtDetection:row.lastHumanAt||null,lastEvidenceFingerprint:`${row.lastClientAt||''}|${row.lastHumanAt||''}|${issueType}`,sourceDate:date,hubUrl:row.hubUrl};
-          await this.store.saveLiveDailyObservation(obs.id,obs);created.push(obs);open.push(obs);
+          obs={id:id('daily_case'),source:'DAILY_V3',supervisorId:cfg.id,seller:row.seller||row.owner,sellerKey:norm(row.seller||row.owner),caseKey,conversationId:row.conversationId,dealId:row.dealId||null,issueType:'COMMERCIAL_CHAT_CASE',severity:commercial.severity,status:'PENDING',quality:commercial.quality,findings:commercial.findings,reason:commercial.findings.map(x=>x.label).join(' | '),expected:commercial.expected,openedAt:now.toISOString(),lastSeenAt:now.toISOString(),lastHumanAtAtDetection:row.lastHumanAt||null,sourceDate:date,hubUrl:row.hubUrl};
+          await this.store.saveLiveDailyObservation(obs.id,obs); created.push(obs); openByCase.set(caseKey,obs);
         }else{
           const newHuman=!!row.lastHumanAt&&!!obs.lastHumanAtAtDetection&&new Date(row.lastHumanAt)>new Date(obs.lastHumanAtAtDetection);
-          const patch={lastSeenAt:now.toISOString(),severity:issue.severity,reason:issue.reason,expected:issue.expected};
-          if(newHuman&&obs.status!=='NOT_CORRECTED'){patch.status='NOT_CORRECTED';patch.lastHumanAtAtDetection=row.lastHumanAt;patch.notCorrectedAt=now.toISOString();patch.attempts=Number(obs.attempts||0)+1;notCorrected.push({...obs,...patch})}
+          const patch={lastSeenAt:now.toISOString(),severity:commercial.severity,quality:commercial.quality,dimensions:commercial.dimensions,findings:commercial.findings,reason:commercial.findings.map(x=>x.label).join(' | '),expected:commercial.expected};
+          if(newHuman){patch.status='NOT_CORRECTED';patch.lastHumanAtAtDetection=row.lastHumanAt;patch.notCorrectedAt=now.toISOString();patch.attempts=Number(obs.attempts||0)+1;notCorrected.push({...obs,...patch})}
           await this.store.saveLiveDailyObservation(obs.id,patch);
         }
-      }
-
-      for(const obs of open){
-        if(!OPEN_STATUSES.has(obs.status)||issues.has(obs.issueType))continue;
+      }else if(obs){
         const hasNewHuman=!!row.lastHumanAt&&(!obs.lastHumanAtAtDetection||new Date(row.lastHumanAt)>new Date(obs.lastHumanAtAtDetection));
-        if(hasNewHuman || obs.issueType==='NO_HUMAN_RESPONSE'){
-          const patch={status:'CORRECTED',correctedAt:now.toISOString(),lastSeenAt:now.toISOString(),correctionEvidence:{lastHumanAt:row.lastHumanAt||null,lastHumanText:row.lastHumanText||null}};
-          await this.store.saveLiveDailyObservation(obs.id,patch);corrected.push({...obs,...patch});
-        }
+        if(hasNewHuman){const patch={status:'CORRECTED',quality:'BIEN_TRABAJADO',correctedAt:now.toISOString(),lastSeenAt:now.toISOString(),correctionEvidence:{lastHumanAt:row.lastHumanAt||null,lastHumanText:row.lastHumanText||null}};await this.store.saveLiveDailyObservation(obs.id,patch);corrected.push({...obs,...patch})}
       }
     }
     return{created,corrected,notCorrected};
@@ -213,11 +260,14 @@ class LiveDailySupervisor{
     const pending=obs.filter(o=>OPEN_STATUSES.has(o.status)),corrected=obs.filter(o=>o.status==='CORRECTED'&&String(o.correctedAt||'').startsWith(day)),notCorrected=obs.filter(o=>o.status==='NOT_CORRECTED');
     const red=pending.filter(o=>o.issueType==='OVERDUE_DEAL'&&o.severity==='RED');
     const s=result.bySeller||[];
-    const totals=s.reduce((a,x)=>{a.clientChats+=Number(x.clientChats||0);a.responded+=Number(x.respondedClientChats||0);a.noResponse+=Number(x.noHumanResponse||0);a.late+=Number(x.late||0);a.good+=Number(x.goodCommercial||0);a.noDiscovery+=Number(x.operationalWithoutDiscovery||0);a.unexplored+=Number(x.unexploredPotential||0);return a},{clientChats:0,responded:0,noResponse:0,late:0,good:0,noDiscovery:0,unexplored:0});
+    const totals=s.reduce((a,x)=>{a.clientChats+=Number(x.clientChats||0);a.responded+=Number(x.respondedClientChats||0);a.noResponse+=Number(x.noHumanResponse||0);a.late+=Number(x.late||0);a.noDiscovery+=Number(x.operationalWithoutDiscovery||0);a.unexplored+=Number(x.unexploredPotential||0);return a},{clientChats:0,responded:0,noResponse:0,late:0,noDiscovery:0,unexplored:0});
+    totals.good=(result.cases||[]).filter(row=>buildCommercialCase(row).quality==='BIEN_TRABAJADO').length;
+    totals.review=(result.cases||[]).filter(row=>buildCommercialCase(row).quality==='REVISAR').length;
+    totals.toCorrect=(result.cases||[]).filter(row=>buildCommercialCase(row).quality==='A_CORREGIR').length;
     const label=cfg.sellerLabel||cfg.name||cfg.sellers?.join(', ')||'Vendedor';
-    const lines=[`📊 SUPERVISIÓN DIARIA EN VIVO — ${label}`,`Fecha ${day} · acumulado desde 09:00`,`Modo: ${deliveryMode}`,'',`Clientes del día: ${totals.clientChats}`,`Respondidos: ${totals.responded}`,`Sin respuesta humana: ${totals.noResponse}`,`Respuestas tarde: ${totals.late}`,`Buenas respuestas comerciales: ${totals.good}`,`Operativas sin indagar: ${totals.noDiscovery}`,`Potencial no explorado: ${totals.unexplored}`,'',`🟠 Pendientes: ${pending.length}`,`✅ Corregidas hoy: ${corrected.length}`,`❌ No corregidas: ${notCorrected.length}`,`🔴 Nuevos tratos +7 días bajo Supervisor: ${red.length}`,`🧹 Backlog histórico en Recovery: ${result.observations?.overdue?.historicalOpen||0} (${result.observations?.overdue?.historicalRed||0} con +7 días)`];
+    const lines=[`📊 SUPERVISIÓN DIARIA EN VIVO — ${label}`,`Fecha ${day} · acumulado desde 09:00`,`Modo: ${deliveryMode}`,'',`Clientes del día: ${totals.clientChats}`,`Respondidos: ${totals.responded}`,`Sin respuesta humana: ${totals.noResponse}`,`Respuestas tarde: ${totals.late}`,`Bien trabajados: ${totals.good}`,`Revisar: ${totals.review}`,`A corregir: ${totals.toCorrect}`,`Operativas sin indagar: ${totals.noDiscovery}`,`Potencial no explorado: ${totals.unexplored}`,'',`🟠 Pendientes: ${pending.length}`,`✅ Corregidas hoy: ${corrected.length}`,`❌ No corregidas: ${notCorrected.length}`,`🔴 Nuevos tratos +7 días bajo Supervisor: ${red.length}`,`🧹 Backlog histórico en Recovery: ${result.observations?.overdue?.historicalOpen||0} (${result.observations?.overdue?.historicalRed||0} con +7 días)`];
     const newObs=[...(result.observations?.created||[]),...(result.observations?.overdue?.created||[])];
-    if(newObs.length){lines.push('','🆕 NUEVOS CASOS');for(const o of newObs.slice(0,10))lines.push(`${o.severity==='RED'?'🔴':'⚠️'} ${o.reason}\nEsperado: ${o.expected}\n${o.hubUrl||''}`.trim())}
+    if(newObs.length){lines.push('','🆕 NUEVOS CASOS');for(const o of newObs.slice(0,10)){if(o.issueType==='COMMERCIAL_CHAT_CASE'){const d=o.dimensions||{};const dimLines=[`Tiempo: ${d.responseTime?.label||'-'}`,`Calidad: ${d.responseQuality?.label||'-'}`,`Asesoramiento: ${d.advisory?.label||'-'}`,`Guía: ${d.guidance?.label||'-'}`,`Oportunidad: ${d.opportunity?.label||'-'}`,`Seguimiento: ${d.followUp?.label||'-'}`].join('\n');lines.push(`⚠️ CASO ${o.quality==='REVISAR'?'A REVISAR':'A CORREGIR'}\n${dimLines}\nEsperado: ${o.expected}\n${o.hubUrl||''}`.trim())}else lines.push(`${o.severity==='RED'?'🔴':'⚠️'} ${o.reason}\nEsperado: ${o.expected}\n${o.hubUrl||''}`.trim())}}
     const changes=[...(result.observations?.corrected||[]),...(result.observations?.overdue?.corrected||[])];
     if(changes.length){lines.push('','✅ CORREGIDAS DESDE EL ÚLTIMO CONTROL');for(const o of changes.slice(0,10))lines.push(`• ${o.issueType} — ${o.hubUrl||o.caseKey}`)}
     const fails=result.observations?.notCorrected||[];
@@ -227,4 +277,4 @@ class LiveDailySupervisor{
   }
 }
 
-module.exports={LiveDailySupervisor,ACTIVE_OVERDUE_STAGES,OPEN_STATUSES,argentinaDate,dayRange,issueMap};
+module.exports={LiveDailySupervisor,ACTIVE_OVERDUE_STAGES,OPEN_STATUSES,argentinaDate,dayRange,issueMap,buildCommercialCase};

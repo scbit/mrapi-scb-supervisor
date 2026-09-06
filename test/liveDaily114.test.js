@@ -1,0 +1,4 @@
+const test=require('node:test');const assert=require('node:assert/strict');const {buildCommercialCase}=require('../src/core/liveDailySupervisor');
+test('one chat one case',()=>{const c=buildCommercialCase({noHumanResponse:false,botOnly:false,lateResponses:[{minutes:73,humanAt:'x'}],lastHumanAt:'x',operationalWithoutDiscovery:true,unexploredPotential:true,needsReviewByAi:true});assert.equal(c.quality,'A_CORREGIR');assert.ok(c.findings.length>=3)});
+test('clean chat well worked',()=>{const c=buildCommercialCase({noHumanResponse:false,botOnly:false,lateResponses:[],operationalWithoutDiscovery:false,unexploredPotential:false,needsReviewByAi:false});assert.equal(c.quality,'BIEN_TRABAJADO')});
+test('commercial expected action avoids passive close',()=>{const c=buildCommercialCase({operationalWithoutDiscovery:true,unexploredPotential:true,lateResponses:[]});assert.ok(c.expected.includes('respuestas pasivas'));assert.ok(c.expected.includes('próximo paso'))});
