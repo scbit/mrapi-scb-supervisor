@@ -187,3 +187,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - El resumen agrega `Chats del día`; debe coincidir con los casos listados.
 - Seguimientos sin inbound muestran `Seguimiento: ...`, nunca `A TIEMPO · 0 min`.
 - Nueva caché `guide_v1_all_chats_v1`.
+
+## v0.13.9 — Avance comercial concreto
+- BIEN TRABAJADO exige avance comercial verificable.
+- Tipos válidos: QUOTE_SENT, QUOTE_READY, SUPPLIER_LINK_USED, GUIDED_SUPPLIER_SEARCH, MODE_RECOMMENDATION, BUSINESS_DISCOVERY, CALL_AGREED.
+- Mantener el chat abierto, pedir un dato técnico aislado o mandar a Alibaba sin criterio ya no cuenta como avance.
+- Caso Bety incorporado como regla de calibración: producto + intención + cantidad, pero sin proveedor; si se la manda sola a Alibaba sin guía ni retorno con links/MOQ/precio/peso/medidas, queda A CORREGIR.
+- Si el propio análisis dice que no quedó próximo paso, no se transformó en oportunidad, no avanzó demasiado o faltó acompañamiento, no puede quedar BIEN TRABAJADO.
+- Nueva caché `guide_v1_concrete_advance_v1`.

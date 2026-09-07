@@ -135,12 +135,25 @@ function applyAi(row,ai){
   const followQuality=String(ai.follow_up_quality||'NO_APLICA').toUpperCase();
   const followUpNeedsCorrection=row.sellerFollowUpInWindow&&followQuality==='INSUFICIENTE';
   const followUpCorrect=row.sellerFollowUpInWindow&&followQuality==='CORRECTO';
-  const g=ai.guide_checklist||{};
-  const commercialAdvance=ai.commercial_advance===true||g.left_concrete_next_step===true||g.gave_useful_recommendation===true;
+
+  const allowedAdvanceTypes=new Set(['QUOTE_SENT','QUOTE_READY','SUPPLIER_LINK_USED','GUIDED_SUPPLIER_SEARCH','MODE_RECOMMENDATION','BUSINESS_DISCOVERY','CALL_AGREED']);
+  const advanceType=String(ai.commercial_advance_type||'NONE').toUpperCase();
+  const reasonText=String(ai.commercial_advance_reason||ai.summary||'').toLowerCase();
+  const contradictory=/no qued[oó] (un )?pr[oó]ximo paso|no se transform[oó] en (una )?oportunidad|no avanz[oó] demasiado|falt[oó] acompa[nñ]amiento|sin pr[oó]ximo paso|mand(ar|ó|o) .*alibaba.*sin|buscar sola.*alibaba/.test(reasonText);
+  const explicitEvidence=
+    allowedAdvanceTypes.has(advanceType) &&
+    (
+      ai.concrete_next_step===true ||
+      ai.useful_recommendation===true ||
+      ['QUOTE_SENT','QUOTE_READY','SUPPLIER_LINK_USED','GUIDED_SUPPLIER_SEARCH','BUSINESS_DISCOVERY'].includes(advanceType)
+    );
+  const commercialAdvance=ai.commercial_advance===true&&explicitEvidence&&!contradictory;
+
   const serious=result==='mal'||risk==='alto'||ai.grave_failure===true||followUpNeedsCorrection;
   const good=row.humanResponded&&commercialAdvance&&!serious;
   const legacyNeeds=result==='mal'||risk==='alto'||operational||unexplored||followUpNeedsCorrection||Number(ai.overall_score||100)<65||arr(ai.bad_points).length>0;
-  return{...row,ai:{...ai,commercialDiscoveryLevel:level,commercialRisk:risk},commercialAdvance,commercialAdvanceType:String(ai.commercial_advance_type||'NONE').toUpperCase(),followUpNeedsCorrection,followUpCorrect,needsReviewByAi:legacyNeeds,operationalWithoutDiscovery:operational,unexploredPotential:unexplored,goodCommercialResponse:good,commercialDiscoveryLevel:level,commercialRisk:risk}
+
+  return{...row,ai:{...ai,commercialDiscoveryLevel:level,commercialRisk:risk},commercialAdvance,commercialAdvanceType:advanceType,followUpNeedsCorrection,followUpCorrect,needsReviewByAi:legacyNeeds,operationalWithoutDiscovery:operational,unexploredPotential:unexplored,goodCommercialResponse:good,commercialDiscoveryLevel:level,commercialRisk:risk}
 }
 function exclusionReason(c,row,messages){const owner=norm(row?.seller||row?.owner||c.owner);if(owner==='basura@sentirecustomsbroker.com')return'owner_excluido_basura';const hay=((messages||[]).filter(m=>actor(m)==='client').map(m=>m.text||'').join(' ')+' '+(c.contactName||'')).toLowerCase();return['curriculum','currículum','enviar cv','mandar cv','busco trabajo','busco laburo','vacante','oferta laboral','toman choferes'].some(k=>hay.includes(k))?'consulta_empleo_cv':''}
 function summary(rows){

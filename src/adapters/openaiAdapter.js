@@ -43,9 +43,20 @@ Criterio comercial — Guía SCB v1.0:
 - Es falla grave cerrar con 'avisame', 'buscá en Alibaba' o 'pensalo' sin guía concreta cuando hay oportunidad o necesidad de orientación.
 - El checklist ayuda, pero NO hace falta cumplirlo perfecto.
 - Regla prioritaria: AVANCE COMERCIAL REAL > CHECKLIST PERFECTO.
-- BIEN TRABAJADO si el vendedor logró un avance concreto adecuado a la etapa: cotizó o dejó cotización encaminada; recibió un link de Alibaba/proveedor y lo usó para avanzar; si el cliente no sabe qué importar, preguntó rubro/qué le gustaría vender/canal y lo orientó con criterio; recomendó una modalidad útil; mostró interés real por el negocio y dejó próximo paso.
+- BIEN TRABAJADO exige AVANCE CONCRETO VERIFICABLE, no solo buena intención.
+- Contá como avance válido alguno de estos casos:
+  1) QUOTE_SENT: cotización efectivamente enviada;
+  2) QUOTE_READY: quedaron reunidos los datos necesarios y el próximo paso es cotizar;
+  3) SUPPLIER_LINK_USED: el cliente mandó link/proveedor y el vendedor lo usó para avanzar;
+  4) GUIDED_SUPPLIER_SEARCH: si no tiene proveedor, el vendedor lo guía con criterio (2-3 proveedores, MOQ, precio, peso/medidas, links) y deja qué enviar luego;
+  5) MODE_RECOMMENDATION: recomienda modalidad concreta con fundamento y deja siguiente paso;
+  6) BUSINESS_DISCOVERY: si no sabe qué importar, descubre rubro/qué quiere vender/canal/estructura y lo orienta con criterio;
+  7) CALL_AGREED: llamada concreta acordada para avanzar el caso, no solo 'seguimos por llamada algún día'.
+- NO alcanza para BIEN TRABAJADO: mantener la conversación abierta, pedir un dato técnico aislado, decir 'buscá en Alibaba', decir 'te llamo' sin acuerdo concreto, repetir lo que dijo el bot, o dejar al cliente con la iniciativa.
 - NO marques mal un chat solo porque faltó una pregunta del checklist si el vendedor ya hizo avanzar suficientemente la oportunidad.
 - A CORREGIR si no hubo avance: saludo vacío, pedido técnico aislado, mandar a Alibaba sin criterio, 'avisame', no usar contexto del bot o no dejar próximo paso cuando correspondía.
+- CASO BETY como referencia de calibración: producto concreto + intención de compra + cantidad, pero sin proveedor. Si el vendedor la manda a buscar sola en Alibaba y no la guía sobre cómo comparar proveedores ni le pide que vuelva con links/MOQ/precio/peso/medidas para cotizar, ES A CORREGIR. Haber preguntado producto/cantidad/proveedor al inicio NO alcanza.
+- Si tu propio motivo dice cosas como 'no quedó próximo paso concreto', 'no se transformó en oportunidad', 'no avanzó demasiado' o 'faltó acompañamiento', entonces commercial_advance DEBE ser false.
 - Falla HIPER_GRAVE: (a) perfil inversor/sin producto y lo manda solo a Alibaba sin discovery; (b) importador experimentado tratado como novato con explicación irrelevante en vez de optimización; (c) producto concreto + intención real y el vendedor la despacha/cierra sin desarrollar ni dejar avance.
 - Si el BOT ya descubrió producto, uso, negocio, proveedor, intención u otros datos, el VENDEDOR HUMANO debe CONTINUAR desde ese contexto. Repetir discovery ya resuelto o entrar con un saludo genérico sin avanzar NO es seguimiento correcto.
 - Un seguimiento humano solo es CORRECTO si aprovecha el contexto previo y hace avanzar la oportunidad: por ejemplo recomienda courier/marítimo según cantidad, pide volumen/proveedor/origen cuando falta, explica valor SCB o deja próximo paso concreto.
@@ -126,7 +137,7 @@ Devolvé SOLO JSON válido con esta estructura:
   "follow_up_expected_action": "",
   "used_bot_context": false,
   "commercial_advance": false,
-  "commercial_advance_type": "NONE",
+  "commercial_advance_type": "NONE|QUOTE_SENT|QUOTE_READY|SUPPLIER_LINK_USED|GUIDED_SUPPLIER_SEARCH|MODE_RECOMMENDATION|BUSINESS_DISCOVERY|CALL_AGREED",
   "commercial_advance_reason": ""
 }`;
     const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido. No agregues markdown.'},{role:'user',content:prompt}]})});
