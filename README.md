@@ -138,3 +138,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Reutiliza análisis ya guardado del mismo día/corte/Guía SCB en vez de volver a llamar IA.
 - La request final solo compone el reporte y, si corresponde, envía Telegram.
 - No cambia Scheduler ni activa automatización.
+
+## v0.13.3 — Supervisor en Vivo approved-format cleanup
+- Supervisor en Vivo prefiltra conversaciones por owner/vendedor antes de leer mensajes o ejecutar IA.
+- La prueba de Augusto ya no procesa el universo completo del día para luego filtrar.
+- `Bien trabajados` usa la misma regla de corrección de la Guía SCB: un chat no puede estar a la vez bien trabajado y a corregir.
+- Estados técnicos como SUPERSEDED no aparecen en el reporte humano: se muestran solo PENDIENTE / CORREGIDA / NO CORREGIDA.
+- Producto se presenta como `Producto` + `Producto descubierto por`.
+- Actualizar grupos del bot ahora muestra feedback, refresca setup y combina detección del bot con grupos ya configurados.

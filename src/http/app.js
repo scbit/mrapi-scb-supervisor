@@ -86,14 +86,14 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
   app.get('/api/supervisor/automation/health',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.getAutomationHealth()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/pause',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.pauseAutomation(q.body?.reason||'MANUAL_PAUSE')})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/resume',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.resumeAutomation()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
-  function manualGuideReportKey(date,cutoff=17){return `${date}__cutoff_${Number(cutoff)}__guide_v1`}
+  function manualGuideReportKey(date,cutoff=17,sellerKey=null){const seller=sellerKey?`__seller_${Buffer.from(String(sellerKey).trim().toLowerCase()).toString('base64url').slice(0,80)}`:'';return `${date}__cutoff_${Number(cutoff)}__guide_v1${seller}`}
   app.post('/api/supervisor/manual/start',auth,async(q,r)=>{try{
-    const date=String(q.body?.date||'').trim(),cutoff=Number(q.body?.cutoff||17);
+    const date=String(q.body?.date||'').trim(),cutoff=Number(q.body?.cutoff||17),sellerKey=String(q.body?.sellerKey||'').trim()||null;
     if(!/^\d{4}-\d{2}-\d{2}$/.test(date))throw new Error('DAILY_DATE_REQUIRED');
-    const reportKey=manualGuideReportKey(date,cutoff);
+    const reportKey=manualGuideReportKey(date,cutoff,sellerKey);
     const cached=await engine.store.getDailyReport(reportKey);
-    if(cached&&Array.isArray(cached.rows)&&q.body?.refresh!==true)return r.json({ok:true,cached:true,reportKey,report:cached});
-    const result=await dailyService.start({date,startHour:9,endHour:cutoff,lateMinutes:30,limit:500,forceAi:false,reportKey,reviewScope:'guide_v1'});
+    if(cached&&Array.isArray(cached.rows)&&q.body?.refresh!==true)return r.json({ok:true,cached:true,reportKey,report:cached,total:cached.rows.length,sellerKey});
+    const result=await dailyService.start({date,startHour:9,endHour:cutoff,lateMinutes:30,limit:500,forceAi:false,reportKey,reviewScope:'guide_v1',sellerKey});
     r.json({ok:true,cached:false,reportKey,...result});
   }catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/manual/process',auth,async(q,r)=>{try{
