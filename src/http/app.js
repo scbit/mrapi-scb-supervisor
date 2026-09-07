@@ -87,6 +87,29 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     return{date:`${parts.year}-${parts.month}-${parts.day}`,weekday:parts.weekday,hour:Number(parts.hour),minute:Number(parts.minute),minutes:Number(parts.hour)*60+Number(parts.minute)}
   }
   function hmMinutes(v,def='17:00'){const m=String(v||def).match(/^(\d{1,2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):17*60}
+  async function mapLimited(rows,limit,worker){
+    const out=new Array(rows.length),next={i:0};
+    const run=async()=>{while(true){const i=next.i++;if(i>=rows.length)return;try{out[i]=await worker(rows[i],i)}catch(e){out[i]={error:String(e.message||e)}}}};
+    await Promise.all(Array.from({length:Math.min(Math.max(1,limit),Math.max(1,rows.length))},run));
+    return out
+  }
+  async function manualLikeSellerBase({date,cutoff,group}){
+    const sellerKey=String(group.sellerId||group.sellers?.[0]||''),sellerLabel=String(group.sellerLabel||group.name||sellerKey);
+    if(!sellerKey)throw new Error('SELLER_KEY_REQUIRED');
+    const base=await manualSupervisionService.base(date,cutoff,false,sellerKey);
+    return{sellerKey,sellerLabel,base}
+  }
+  async function manualLikeCombinedBase({date,cutoff,groups}){
+    const parts=await mapLimited(groups,3,g=>manualLikeSellerBase({date,cutoff,group:g}));
+    const rows=[];let aiUsedCount=0;const aiErrors=[];
+    for(const x of parts){
+      if(x?.error){aiErrors.push({error:x.error});continue}
+      rows.push(...(x.base?.rows||[]));
+      aiUsedCount+=Number(x.base?.aiUsedCount||0);
+      if(Array.isArray(x.base?.aiErrors))aiErrors.push(...x.base.aiErrors);
+    }
+    return{date,cutoffHour:Number(cutoff),rows,aiUsedCount,aiErrors,generatedAt:new Date().toISOString(),source:'manual_like_seller_cache'}
+  }
   async function runApprovedLiveAuto({now,send=true,setup}){
     const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
     if(wd.liveAutoEnabled!==true)return{product:'live',skipped:true,reason:'LIVE_AUTO_DISABLED'};
@@ -97,18 +120,16 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     const groups=(setup.sellerGroups||[]).filter(g=>g.enabled!==false&&g.telegramChatId);
     if(!groups.length)return{product:'live',skipped:true,reason:'LIVE_NO_CONFIGURED_GROUPS'};
     const cutoff=Math.min(17,Math.max(10,p.hour+(p.minute>0?1:0)));
-    const base=await manualSupervisionService.base(p.date,cutoff,false,null);
-    const results=[];
-    for(const g of groups){
-      const sellerKey=String(g.sellerId||g.sellers?.[0]||''),sellerLabel=String(g.sellerLabel||g.name||sellerKey);
-      try{
-        const report=await manualSupervisionService.liveSellerFromBase({base,date:p.date,cutoff,sellerKey,sellerLabel});
-        const sent=send?await telegram.send(report.text,g.telegramChatId):null;
-        results.push({sellerKey,sellerLabel,reportId:report.id,sent:!!sent});
-      }catch(e){results.push({sellerKey,sellerLabel,error:e.message})}
-    }
-    await engine.store.saveRemoteCheckpoint('approved_live_auto_last',{at:now.toISOString(),date:p.date,cutoff,results:results.map(x=>({sellerKey:x.sellerKey,sent:x.sent===true,error:x.error||null}))});
-    return{product:'live',skipped:false,date:p.date,cutoff,groups:groups.length,results}
+    // Same functional path as the manual mass test: seller-specific analysis/cache,
+    // then the approved live formatter and Telegram destination for that seller.
+    const results=await mapLimited(groups,3,async g=>{
+      const {sellerKey,sellerLabel,base}=await manualLikeSellerBase({date:p.date,cutoff,group:g});
+      const report=await manualSupervisionService.liveSellerFromBase({base,date:p.date,cutoff,sellerKey,sellerLabel});
+      const sent=send?await telegram.send(report.text,g.telegramChatId):null;
+      return{sellerKey,sellerLabel,reportId:report.id,sent:!!sent}
+    });
+    await engine.store.saveRemoteCheckpoint('approved_live_auto_last',{at:now.toISOString(),date:p.date,cutoff,results:results.map(x=>({sellerKey:x?.sellerKey||null,sent:x?.sent===true,error:x?.error||null}))});
+    return{product:'live',skipped:false,date:p.date,cutoff,groups:groups.length,execution:'MANUAL_LIKE',results}
   }
   async function runApprovedSuperAuto({now,send=true,setup}){
     const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
@@ -119,9 +140,11 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     const cpKey=`scheduled_super_sent__${p.date}__${cutoff}`,already=await engine.store.getRemoteCheckpoint(cpKey);
     if(already?.sentAt)return{product:'super',skipped:true,reason:'SUPER_ALREADY_SENT',cutoff,sentAt:already.sentAt};
     const chatId=wd.superSupervisorChatId;if(!chatId)return{product:'super',skipped:true,reason:'SUPER_TELEGRAM_NOT_CONFIGURED'};
-    const report=await manualSupervisionService.superSupervisor({date:p.date,cutoff,forceAi:false}),sent=send?await telegram.send(report.text,chatId):null;
+    const groups=(setup.sellerGroups||[]).filter(g=>g.enabled!==false);
+    const base=await manualLikeCombinedBase({date:p.date,cutoff,groups});
+    const report=await manualSupervisionService.superSupervisorFromBase({base,date:p.date,cutoff}),sent=send?await telegram.send(report.text,chatId):null;
     if(send)await engine.store.saveRemoteCheckpoint(cpKey,{sentAt:new Date().toISOString(),reportId:report.id,chatId,source:'unified_tick'});
-    return{product:'super',skipped:false,date:p.date,cutoff,reportId:report.id,sent:!!sent}
+    return{product:'super',skipped:false,date:p.date,cutoff,execution:'MANUAL_LIKE',reportId:report.id,sent:!!sent}
   }
   async function runApprovedCloseAuto({now,send=true,setup}){
     const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
@@ -132,9 +155,11 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     const cpKey=`scheduled_close_sent__${p.date}`,already=await engine.store.getRemoteCheckpoint(cpKey);
     if(already?.sentAt)return{product:'close',skipped:true,reason:'CLOSE_ALREADY_SENT',sentAt:already.sentAt};
     const chatId=wd.closingChatId;if(!chatId)return{product:'close',skipped:true,reason:'CLOSE_TELEGRAM_NOT_CONFIGURED'};
-    const report=await manualSupervisionService.closing({date:p.date,forceAi:false}),sent=send?await telegram.send(report.text,chatId):null;
+    const groups=(setup.sellerGroups||[]).filter(g=>g.enabled!==false);
+    const base=await manualLikeCombinedBase({date:p.date,cutoff:17,groups});
+    const report=await manualSupervisionService.closingFromBase({base,date:p.date}),sent=send?await telegram.send(report.text,chatId):null;
     if(send)await engine.store.saveRemoteCheckpoint(cpKey,{sentAt:new Date().toISOString(),reportId:report.id,chatId,source:'unified_tick'});
-    return{product:'close',skipped:false,date:p.date,reportId:report.id,sent:!!sent}
+    return{product:'close',skipped:false,date:p.date,execution:'MANUAL_LIKE',reportId:report.id,sent:!!sent}
   }
   async function runProductAutomation({now,send=true}){
     const setup=await remoteService.getNetworkSetup();

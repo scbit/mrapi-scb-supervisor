@@ -47,12 +47,14 @@ test('0.13.24 report clock does not invoke legacy weekday tick',()=>{
   assert.equal(block.includes('automationTick({'),false);
 });
 
-test('0.13.19 approved live automatic reuses one global base and same live formatter',()=>{
- const app=fs.readFileSync('src/http/app.js','utf8');
- const manual=fs.readFileSync('src/core/manualSupervision.js','utf8');
- assert.ok(app.includes('manualSupervisionService.base(p.date,cutoff,false,null)'));
- assert.ok(app.includes('liveSellerFromBase'));
- assert.ok(manual.includes('async liveSellerFromBase'));
+test('0.13.25 approved live automatic uses seller-specific cached bases and same formatter',()=>{
+  const s=fs.readFileSync('src/http/app.js','utf8');
+  const a=s.indexOf('async function runApprovedLiveAuto');
+  const b=s.indexOf('async function runApprovedSuperAuto',a);
+  const block=s.slice(a,b);
+  assert.ok(block.includes('manualLikeSellerBase'));
+  assert.ok(block.includes('liveSellerFromBase'));
+  assert.equal(block.includes('base(p.date,cutoff,false,null)'),false);
 });
 
 test('0.13.19 dedicated SUPER scheduler respects product switch',()=>{

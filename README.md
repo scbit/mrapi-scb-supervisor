@@ -349,3 +349,18 @@ Objetivo de costo:
 - Evitar reads de fuentes operativas provocados solamente porque toca enviar Telegram.
 - Mantener IA/caché de reportes separada del ciclo de ingestión.
 - No reanalizar mensajes sin necesidad cuando existe Daily V3 persistido/caché.
+
+## v0.13.25 — MANUAL-LIKE AUTOMATION
+- Corrige el REPORT CLOCK que todavía podía vencer por generar un único Daily V3 global pesado.
+- Supervisor en Vivo automático ahora replica el patrón probado por `PROBAR TODOS LOS GRUPOS AHORA`:
+  - análisis/cache por vendedor;
+  - formatter aprobado por vendedor;
+  - envío al Telegram de ese vendedor.
+- Los vendedores se procesan con concurrencia acotada de 3 para evitar una única generación global de 500 conversaciones.
+- SUPER y Cierre construyen su base a partir de los mismos análisis/cache por vendedor y no regeneran un Daily V3 global antes de enviar.
+- No cambia la lógica comercial ni los textos aprobados.
+- No agrega infraestructura ni schedulers.
+- Se mantienen los dos schedulers:
+  - `/api/supervisor/remote/tick` = reportes;
+  - `/api/supervisor/sync/tick` = sync incremental.
+- El objetivo de costo se mantiene: seller cache existente se reutiliza; no se fuerza IA (`forceAi:false`).
