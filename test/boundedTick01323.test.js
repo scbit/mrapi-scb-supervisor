@@ -20,11 +20,11 @@ test('0.13.23 scheduler uses smaller bounded source batches',()=>{
   assert.ok(s.includes('engine.run({now,limits:engineLimits})'));
 });
 
-test('0.13.23 weekday scheduler skips obsolete remote reporting path',()=>{
+test('0.13.24 sync scheduler skips obsolete remote reporting path',()=>{
   const core=fs.readFileSync('src/core/remoteSupervisor.js','utf8');
   const app=fs.readFileSync('src/http/app.js','utf8');
   assert.ok(core.includes("mode:'sync_only'"));
-  assert.ok(app.includes('runLegacy:isWeekend'));
+  assert.ok(app.includes("source:'scheduler',runLegacy:false"));
 });
 
 test('0.13.23 automatic product failures are isolated',()=>{

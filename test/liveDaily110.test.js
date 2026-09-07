@@ -22,12 +22,12 @@ test('0.11.0 UI exposes DRY_RUN and ACTIVE modes',()=>{
   assert.ok(html.includes('misma lógica Daily V3'));
 });
 
-test('0.11.0 remote tick refreshes core incrementally before live supervision',()=>{
+test('0.13.24 report and sync clocks are separated',()=>{
   const http=fs.readFileSync('src/http/app.js','utf8');
   const remote=fs.readFileSync('src/core/remoteSupervisor.js','utf8');
-  assert.ok(http.includes("remoteService.automationTick({engine,now"));
+  assert.ok(http.includes("/api/supervisor/remote/tick"));
+  assert.ok(http.includes("/api/supervisor/sync/tick"));
   assert.ok(remote.includes("engine.run({now,limits:engineLimits})"));
-  assert.ok(remote.includes("runLegacy?await this.tick({now,send})"));
 });
 
 test('0.11.0 general summary reads persisted live reports, not AI',()=>{

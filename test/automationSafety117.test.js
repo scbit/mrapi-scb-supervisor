@@ -2,9 +2,10 @@ const test=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('fs');
 
-test('0.11.7 remote tick is routed through safety wrapper',()=>{
+test('0.13.24 sync tick is routed through safety wrapper',()=>{
   const s=fs.readFileSync('src/http/app.js','utf8');
-  assert.ok(s.includes("remoteService.automationTick({engine,now"));
+  assert.ok(s.includes("/api/supervisor/sync/tick"));
+  assert.ok(s.includes("remoteService.automationTick({engine,now,send:false"));
   assert.ok(s.includes("/api/supervisor/automation/health"));
   assert.ok(s.includes("/api/supervisor/automation/pause"));
   assert.ok(s.includes("/api/supervisor/automation/resume"));

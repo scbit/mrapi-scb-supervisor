@@ -38,9 +38,13 @@ test('0.13.19 existing 15 minute tick runs approved product automation',()=>{
  assert.ok(s.includes('runApprovedCloseAuto'));
 });
 
-test('0.13.19 weekday legacy tick does not send duplicate seller telegram',()=>{
- const s=fs.readFileSync('src/http/app.js','utf8');
- assert.ok(s.includes('send:isWeekend?automaticSend:false'));
+test('0.13.24 report clock does not invoke legacy weekday tick',()=>{
+  const s=fs.readFileSync('src/http/app.js','utf8');
+  const a=s.indexOf("app.post('/api/supervisor/remote/tick'");
+  const b=s.indexOf("app.post('/api/supervisor/sync/tick'",a);
+  const block=s.slice(a,b);
+  assert.ok(block.includes('runProductAutomation({now,send:automaticSend})'));
+  assert.equal(block.includes('automationTick({'),false);
 });
 
 test('0.13.19 approved live automatic reuses one global base and same live formatter',()=>{

@@ -330,3 +330,22 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - El flujo queda: sync incremental acotada -> evaluar los 3 productos aprobados.
 - Los fallos aislados de Live / SUPER / Cierre quedan persistidos como incidentes y no convierten por sí solos todo el tick en HTTP 500.
 - Weekend conserva su flujo existente.
+
+## v0.13.24 — SPLIT SYNC / REPORT CLOCK
+
+Arquitectura:
+- `POST /api/supervisor/remote/tick` = **REPORT CLOCK**.
+  - No ejecuta `engine.run()`.
+  - No lee Bandeja/CRM/Hunter antes de reportar.
+  - Evalúa únicamente Supervisor en Vivo / SUPER / Cierre.
+  - Respeta switches, horarios, idempotencia y DRY_RUN/LIVE existentes.
+- `POST /api/supervisor/sync/tick` = **SYNC CLOCK**.
+  - Ejecuta sincronización incremental acotada con checkpoints.
+  - Usa los límites scheduler de v0.13.23.
+  - `send:false` y `runLegacy:false`: nunca manda Telegram ni genera productos.
+- Un atraso o backlog del SYNC ya no bloquea el envío automático de reportes.
+
+Objetivo de costo:
+- Evitar reads de fuentes operativas provocados solamente porque toca enviar Telegram.
+- Mantener IA/caché de reportes separada del ciclo de ingestión.
+- No reanalizar mensajes sin necesidad cuando existe Daily V3 persistido/caché.

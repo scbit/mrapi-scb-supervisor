@@ -148,16 +148,29 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     return{live,super:superResult,close}
   }
 
+  // v0.13.24 REPORT CLOCK: intentionally light.
+  // It does not run engine.run() or source synchronization. It only evaluates
+  // the approved automatic products using persisted/cached Supervisor state.
   app.post('/api/supervisor/remote/tick',auth,async(q,r)=>{try{
     if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');
     const now=q.body?.now?new Date(q.body.now):new Date(),requestedSend=q.body?.send!==false,source=q.body?.source==='scheduler'?'scheduler':'manual';
     const setup=await remoteService.getNetworkSetup();
     const deliveryMode=String(setup.settings?.liveDaily?.deliveryMode||'DRY_RUN').toUpperCase();
     const automaticSend=requestedSend&&deliveryMode==='LIVE';
-    const p=localAutomationParts(now),isWeekend=['Sat','Sun'].includes(p.weekday);
-    const core=await remoteService.automationTick({engine,now,send:isWeekend?automaticSend:false,force:q.body?.force===true,source,runLegacy:isWeekend});
-    const products=(!core?.skipped?await runProductAutomation({now,send:automaticSend}):{skipped:true,reason:core?.reason||'CORE_TICK_SKIPPED'});
-    r.json({ok:true,...core,deliveryMode,automaticSend,productAutomation:products});
+    if(source==='scheduler')await engine.store.saveRemoteCheckpoint('scheduler_heartbeat',{at:now.toISOString(),mode:'report_clock'});
+    const products=await runProductAutomation({now,send:automaticSend});
+    if(source==='scheduler')await engine.store.saveRemoteCheckpoint('scheduler_heartbeat',{at:now.toISOString(),mode:'report_clock',lastSuccessAt:new Date().toISOString()});
+    r.json({ok:true,mode:'REPORT_CLOCK',deliveryMode,automaticSend,productAutomation:products});
+  }catch(e){r.status(500).json({ok:false,error:e.message})}});
+
+  // v0.13.24 SYNC CLOCK: source ingestion only.
+  // It is incremental, checkpointed and bounded by the v0.13.23 scheduler limits.
+  // It never sends Telegram and never executes Live/SUPER/Cierre.
+  app.post('/api/supervisor/sync/tick',auth,async(q,r)=>{try{
+    if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');
+    const now=q.body?.now?new Date(q.body.now):new Date();
+    const result=await remoteService.automationTick({engine,now,send:false,force:q.body?.force===true,source:'scheduler',runLegacy:false});
+    r.json({ok:true,mode:'SYNC_TICK',result});
   }catch(e){r.status(500).json({ok:false,error:e.message,health:remoteService?await remoteService.getAutomationHealth().catch(()=>null):null})}});
   app.get('/api/supervisor/automation/health',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.getAutomationHealth()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/pause',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.pauseAutomation(q.body?.reason||'MANUAL_PAUSE')})}catch(e){r.status(500).json({ok:false,error:e.message})}});
