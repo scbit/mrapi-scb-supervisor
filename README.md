@@ -111,3 +111,14 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Agrega seguimiento persistente de correcciones: PENDING / CORRECTED / NOT_CORRECTED.
 - Permite comparar dos días del mismo vendedor y devuelve MEJORO / ESTABLE / EMPEORO.
 - La comparación normaliza por cantidad de clientes usando tasas de: buena respuesta comercial, demora, falta de indagación y potencial no explorado.
+
+
+## v0.13.0 — UI final + pruebas manuales
+- Tres productos de supervisión visibles y separados: Supervisor en Vivo, SUPER SUPERVISOR y Cierre Diario Gerencial.
+- IA alineada a Guía Comercial SCB v1.0.
+- Producto definido / producto descubierto por vendedor.
+- Perfil comercial y adecuación de respuesta.
+- Fallos GRAVE / HIPER_GRAVE.
+- Oportunidades con producto definido y link HUB.
+- Cierre con cartera vencida y +7 días.
+- Botones de prueba manual y envío Telegram; scheduler permanece sin automatizar.

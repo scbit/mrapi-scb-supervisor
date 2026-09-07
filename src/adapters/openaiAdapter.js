@@ -11,6 +11,7 @@ Tu tarea es hacer un diagnóstico comercial práctico del chat, separando CLIENT
 No seas alarmista y no evalúes solo si respondió: evaluá si el vendedor realmente vendió de forma consultiva.
 
 Objetivo principal de este análisis:
+Aplicar la Guía Comercial SCB v1.0. Regla madre: responder no alcanza; hay que entender, guiar y dejar un próximo paso.
 Detectar si el vendedor indagó el negocio real del cliente o si respondió de forma operativa sin descubrir potencial comercial.
 Un cliente puede preguntar por una caja, pero en realidad puede ser importador, distribuidor, comercio, fábrica o comprador recurrente con miedo de importar.
 El vendedor debe descubrir eso antes de tratarlo como una consulta chica.
@@ -32,6 +33,18 @@ Evaluá especialmente:
 8. Si el vendedor trató una oportunidad potencial como una consulta chica.
 9. Si hay oportunidad comercial activa y próxima acción concreta.
 10. Si hay una respuesta incorrecta, confusa o que conviene revisar.
+
+Criterio comercial — Guía SCB v1.0:
+- Las 4 preguntas base son: qué producto quiere traer, cómo piensa venderlo, si ya importó antes y si tiene proveedor.
+- Si NO SABE QUÉ IMPORTAR: no mandarlo solo a Alibaba. Descubrir rubro, forma de venta y estructura; orientar categorías posibles.
+- Si NUNCA IMPORTÓ: transmitir seguridad, acompañamiento y costo completo antes de avanzar.
+- Si YA IMPORTA: no explicarle obviedades básicas; descubrir cómo opera hoy, problemas/costos y hablar de optimización, previsibilidad, consolidación y operación integral.
+- Si YA TIENE PRODUCTO: es una oportunidad concreta. Avanzar con cantidad, proveedor/origen y siguiente paso; no dejarla morir.
+- Es falla grave cerrar con 'avisame', 'buscá en Alibaba' o 'pensalo' sin guía concreta cuando hay oportunidad o necesidad de orientación.
+- Checklist de chat bien trabajado: entendió negocio, sabe experiencia importadora, sabe proveedor, explicó valor SCB adaptado, dio recomendación útil y dejó próximo paso.
+- Falla HIPER_GRAVE: (a) perfil inversor/sin producto y lo manda solo a Alibaba sin discovery; (b) importador experimentado tratado como novato con explicación irrelevante en vez de optimización; (c) producto concreto + intención real y el vendedor la despacha/cierra sin desarrollar ni dejar avance.
+- No inventes producto. Si no es claro, product_defined=false y product_name=''.
+- product_source debe ser CLIENTE si el cliente ya lo dijo/mandó, VENDEDOR_DESCUBRIO si surge porque el vendedor preguntó bien, o NO_CLARO.
 
 Criterio comercial:
 - Si el vendedor solo pide datos técnicos/operativos y no pregunta nada del negocio, marcá commercial_discovery_level = bajo o nulo.
@@ -74,7 +87,27 @@ Devolvé SOLO JSON válido con esta estructura:
   "commercial_risk": "bajo",
   "sales_coaching": "",
   "operational_without_discovery": false,
-  "unexplored_potential": false
+  "unexplored_potential": false,
+  "product_defined": false,
+  "product_name": "",
+  "product_source": "NO_CLARO",
+  "seller_discovered_product": false,
+  "customer_profile_type": "DESCONOCIDO",
+  "profile_fit": "CORRECTO",
+  "scb_value_explained": false,
+  "useful_recommendation": false,
+  "concrete_next_step": false,
+  "guide_checklist": {
+    "understood_business": false,
+    "knows_import_experience": false,
+    "knows_supplier": false,
+    "explained_scb_value": false,
+    "gave_useful_recommendation": false,
+    "left_concrete_next_step": false
+  },
+  "grave_failure": false,
+  "grave_failure_level": "NONE",
+  "grave_failure_reason": ""
 }`;
     const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido. No agregues markdown.'},{role:'user',content:prompt}]})});
     const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);
