@@ -146,3 +146,10 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Estados técnicos como SUPERSEDED no aparecen en el reporte humano: se muestran solo PENDIENTE / CORREGIDA / NO CORREGIDA.
 - Producto se presenta como `Producto` + `Producto descubierto por`.
 - Actualizar grupos del bot ahora muestra feedback, refresca setup y combina detección del bot con grupos ya configurados.
+
+## v0.13.4 — Tiempos de respuesta + seguimiento
+- Supervisor en Vivo conserva el producto pero elimina `Producto descubierto por`.
+- Resumen muestra cantidad de respuestas tarde y máxima demora.
+- Cada cliente a corregir muestra `Respuesta: A TIEMPO / TARDE / SIN RESPUESTA` con duración cuando existe.
+- Se agrega `Seguimientos correctos` al resumen.
+- Se agrega sección separada `SEGUIMIENTOS CORRECTOS` para no castigar seguimientos válidos a clientes que dejaron de responder.
