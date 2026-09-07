@@ -130,3 +130,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Permite conservar el Chat ID actual aunque no aparezca en la detección.
 - Permite ingresar Chat ID manual como fallback.
 - Guardar actualiza solo ese vendedor mediante el contrato existente de network/setup.
+
+## v0.13.2 — Manual analysis timeout fix
+- Los tres reportes manuales ya no intentan analizar todo el día + IA dentro de una sola request HTTP.
+- La UI inicia un job Daily V3 y lo procesa en lotes pequeños de 2 conversaciones.
+- Muestra progreso `procesadas/total`.
+- Reutiliza análisis ya guardado del mismo día/corte/Guía SCB en vez de volver a llamar IA.
+- La request final solo compone el reporte y, si corresponde, envía Telegram.
+- No cambia Scheduler ni activa automatización.
