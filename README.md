@@ -172,3 +172,10 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Supervisor debe mantener visible que la próxima fecha CRM no puede quedar vencida.
 - En activaciones ya no se muestra `Respuesta: A TIEMPO · 0 min`; se muestra `ACTIVACIÓN INICIAL · x/3 mensajes`.
 - Nueva caché `guide_v1_followup_v3`.
+
+## v0.13.7 — Bien trabajado = avance comercial real
+- AVANCE COMERCIAL REAL > CHECKLIST PERFECTO.
+- Bien trabajado si cotizó/encaminó cotización, usó un link de proveedor para avanzar, orientó con criterio a quien no sabe qué importar, recomendó algo útil o dejó próximo paso concreto.
+- La tardanza queda como métrica separada de calidad comercial.
+- Producto reforzado leyendo todos los mensajes reales del cliente + fallback para frases explícitas de importar/traer/comprar.
+- Nueva caché `guide_v1_advance_v1`.

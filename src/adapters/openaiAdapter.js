@@ -41,7 +41,11 @@ Criterio comercial — Guía SCB v1.0:
 - Si YA IMPORTA: no explicarle obviedades básicas; descubrir cómo opera hoy, problemas/costos y hablar de optimización, previsibilidad, consolidación y operación integral.
 - Si YA TIENE PRODUCTO: es una oportunidad concreta. Avanzar con cantidad, proveedor/origen y siguiente paso; no dejarla morir.
 - Es falla grave cerrar con 'avisame', 'buscá en Alibaba' o 'pensalo' sin guía concreta cuando hay oportunidad o necesidad de orientación.
-- Checklist de chat bien trabajado: entendió negocio, sabe experiencia importadora, sabe proveedor, explicó valor SCB adaptado, dio recomendación útil y dejó próximo paso.
+- El checklist ayuda, pero NO hace falta cumplirlo perfecto.
+- Regla prioritaria: AVANCE COMERCIAL REAL > CHECKLIST PERFECTO.
+- BIEN TRABAJADO si el vendedor logró un avance concreto adecuado a la etapa: cotizó o dejó cotización encaminada; recibió un link de Alibaba/proveedor y lo usó para avanzar; si el cliente no sabe qué importar, preguntó rubro/qué le gustaría vender/canal y lo orientó con criterio; recomendó una modalidad útil; mostró interés real por el negocio y dejó próximo paso.
+- NO marques mal un chat solo porque faltó una pregunta del checklist si el vendedor ya hizo avanzar suficientemente la oportunidad.
+- A CORREGIR si no hubo avance: saludo vacío, pedido técnico aislado, mandar a Alibaba sin criterio, 'avisame', no usar contexto del bot o no dejar próximo paso cuando correspondía.
 - Falla HIPER_GRAVE: (a) perfil inversor/sin producto y lo manda solo a Alibaba sin discovery; (b) importador experimentado tratado como novato con explicación irrelevante en vez de optimización; (c) producto concreto + intención real y el vendedor la despacha/cierra sin desarrollar ni dejar avance.
 - Si el BOT ya descubrió producto, uso, negocio, proveedor, intención u otros datos, el VENDEDOR HUMANO debe CONTINUAR desde ese contexto. Repetir discovery ya resuelto o entrar con un saludo genérico sin avanzar NO es seguimiento correcto.
 - Un seguimiento humano solo es CORRECTO si aprovecha el contexto previo y hace avanzar la oportunidad: por ejemplo recomienda courier/marítimo según cantidad, pide volumen/proveedor/origen cuando falta, explica valor SCB o deja próximo paso concreto.
@@ -50,7 +54,9 @@ Criterio comercial — Guía SCB v1.0:
 - Si después del CTA publicitario el cliente nunca respondió de verdad, el primer día de intervención humana es ACTIVACIÓN INICIAL: el vendedor debe intentar como mínimo 3 contactos útiles ese día para forzar una respuesta.
 - Si esos 3 intentos no logran respuesta, el caso pasa a SEGUIMIENTO PASIVO: nuevo contacto cada 7 a 10 días y la próxima fecha del CRM debe mantenerse vigente, nunca vencida.
 - Un único 'Hola, ¿cómo estás?' en la activación inicial es insuficiente aunque exista un mensaje automático de publicidad previo.
-- No inventes producto. Si no es claro, product_defined=false y product_name=''.
+- Para detectar producto, revisá TODOS los mensajes reales del cliente en la transcripción, no solo el último. Ejemplo: si dice 'importar una casa prefabricada y un auto', product_defined=true.
+- Ignorar el CTA automático de Meta Ads para métricas NO significa ignorar mensajes reales posteriores del cliente.
+- No inventes producto. Si realmente no aparece, product_defined=false y product_name=''.
 - product_source debe ser CLIENTE si el cliente ya lo dijo/mandó, VENDEDOR_DESCUBRIO si surge porque el vendedor preguntó bien, o NO_CLARO.
 
 Criterio comercial:
@@ -118,7 +124,10 @@ Devolvé SOLO JSON válido con esta estructura:
   "follow_up_quality": "NO_APLICA",
   "follow_up_reason": "",
   "follow_up_expected_action": "",
-  "used_bot_context": false
+  "used_bot_context": false,
+  "commercial_advance": false,
+  "commercial_advance_type": "NONE",
+  "commercial_advance_reason": ""
 }`;
     const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido. No agregues markdown.'},{role:'user',content:prompt}]})});
     const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);

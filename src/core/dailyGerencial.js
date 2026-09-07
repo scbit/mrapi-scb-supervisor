@@ -117,7 +117,7 @@ function analyzeConversation(conversation,messages,range,lateMinutes=30){
     needsHumanNow:noHumanResponse||botOnly||pendingClientMessages>0||leadActivationInsufficient,pendingClientMessages,
     avgHumanResponseMinutes:avg,avgResponseMinutes:avg,maxHumanResponseMinutes:max,lateCount:lateResponses.length,lateResponses,
     lastActor:lastWin?actor(lastWin):'',lastClientAt:lastClient?.timestamp||'',lastHumanAt:lastHuman?.timestamp||'',lastBotAt:lastBot?.timestamp||'',
-    lastClientText:textForReport(lastClient).slice(0,300),lastHumanText:textForReport(lastHuman).slice(0,300),
+    lastClientText:textForReport(lastClient).slice(0,300),clientTexts:inbound.map(m=>textForReport(m).slice(0,700)).filter(Boolean),lastHumanText:textForReport(lastHuman).slice(0,300),
     humanTexts:human.slice(-5).map(m=>({at:m.timestamp,user:m.user||seller,text:textForReport(m).slice(0,500)})),
     followUpAttemptsAfterLastClient,followUpAttemptsInWindow,sellerFollowUpInWindow,followUpOk,readyToDiscardNoResponse,
     adBootstrapIgnored,ignoredAdBootstrapCount:ignoredAdIds.size,noRealCustomerReply,
@@ -135,9 +135,12 @@ function applyAi(row,ai){
   const followQuality=String(ai.follow_up_quality||'NO_APLICA').toUpperCase();
   const followUpNeedsCorrection=row.sellerFollowUpInWindow&&followQuality==='INSUFICIENTE';
   const followUpCorrect=row.sellerFollowUpInWindow&&followQuality==='CORRECTO';
-  const good=row.humanResponded&&['alto','medio'].includes(level)&&(ai.did_ask_business_context||ai.did_ask_volume_potential||ai.did_ask_import_experience||ai.did_detect_customer_profile)&&risk!=='alto'&&result!=='mal'&&!followUpNeedsCorrection;
-  const needs=result==='mal'||risk==='alto'||operational||unexplored||followUpNeedsCorrection||Number(ai.overall_score||100)<65||arr(ai.bad_points).length>0;
-  return{...row,ai:{...ai,commercialDiscoveryLevel:level,commercialRisk:risk},followUpNeedsCorrection,followUpCorrect,needsReviewByAi:needs,operationalWithoutDiscovery:operational,unexploredPotential:unexplored,goodCommercialResponse:good,commercialDiscoveryLevel:level,commercialRisk:risk}
+  const g=ai.guide_checklist||{};
+  const commercialAdvance=ai.commercial_advance===true||g.left_concrete_next_step===true||g.gave_useful_recommendation===true;
+  const serious=result==='mal'||risk==='alto'||ai.grave_failure===true||followUpNeedsCorrection;
+  const good=row.humanResponded&&commercialAdvance&&!serious;
+  const legacyNeeds=result==='mal'||risk==='alto'||operational||unexplored||followUpNeedsCorrection||Number(ai.overall_score||100)<65||arr(ai.bad_points).length>0;
+  return{...row,ai:{...ai,commercialDiscoveryLevel:level,commercialRisk:risk},commercialAdvance,commercialAdvanceType:String(ai.commercial_advance_type||'NONE').toUpperCase(),followUpNeedsCorrection,followUpCorrect,needsReviewByAi:legacyNeeds,operationalWithoutDiscovery:operational,unexploredPotential:unexplored,goodCommercialResponse:good,commercialDiscoveryLevel:level,commercialRisk:risk}
 }
 function exclusionReason(c,row,messages){const owner=norm(row?.seller||row?.owner||c.owner);if(owner==='basura@sentirecustomsbroker.com')return'owner_excluido_basura';const hay=((messages||[]).filter(m=>actor(m)==='client').map(m=>m.text||'').join(' ')+' '+(c.contactName||'')).toLowerCase();return['curriculum','currículum','enviar cv','mandar cv','busco trabajo','busco laburo','vacante','oferta laboral','toman choferes'].some(k=>hay.includes(k))?'consulta_empleo_cv':''}
 function summary(rows){
