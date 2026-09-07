@@ -85,6 +85,14 @@ function trendFrom(prev,current){if(!prev)return'BASELINE';const a=prev.metrics|
 function superText({date,cutoff,rows}){const cases=rows.filter(x=>x.inboundCount>0).map(rowCase),opps=cases.filter(x=>x.opportunity),bad=cases.filter(x=>['GRAVE','HIPER_GRAVE'].includes(x.severity));const L=[`🚨 SUPER SUPERVISOR — ${cutoff}:00`,`Fecha ${date}`,'',`Oportunidades con producto definido: ${opps.length}`,`Fallos graves: ${bad.filter(x=>x.severity==='GRAVE').length}`,`Fallos HIPER GRAVES: ${bad.filter(x=>x.severity==='HIPER_GRAVE').length}`,'','🔥 OPORTUNIDADES QUE NO SE PUEDEN PERDER'];if(!opps.length)L.push('Sin oportunidades concretas detectadas.');opps.slice(0,30).forEach((c,i)=>L.push('',`${i+1}. ${c.contactName} — ${c.seller}`,`Producto: ${c.product.name||'Producto identificado'}`,`Perfil: ${c.profile}`,`Gestión: ${c.needsCorrection?'REQUIERE ACCIÓN':'BIEN TRABAJADA'}`,c.needsCorrection?`Falla: ${c.reason}`:'Sin falla grave detectada.',`HUB: ${c.hubUrl}`));L.push('','🚨 FALLOS GRAVES / HIPER GRAVES');if(!bad.length)L.push('Sin fallos graves detectados.');bad.slice(0,30).forEach((c,i)=>L.push('',`${i+1}. ${c.severity} — ${c.contactName} — ${c.seller}`,`Producto: ${c.product.defined?c.product.name||'identificado':'no identificado'}`,`Perfil: ${c.profile}`,`Qué pasó: ${c.reason}`,`Qué debería hacer: ${c.expected}`,`HUB: ${c.hubUrl}`));return L.join('\n')}
 
 const CLOSE_CRM_STAGES=['SEGUIMIENTO','MARCA PERSONAL','ESPERANDO PI','PARA COTIZAR','COTIZADO PARA ENVIAR','HORNO'];
+const CLOSE_STAGE_PRIORITY={'HORNO':1,'COTIZADO PARA ENVIAR':2,'PARA COTIZAR':3,'ESPERANDO PI':4,'SEGUIMIENTO':5,'MARCA PERSONAL':6};
+function closeStagePriority(stage){return CLOSE_STAGE_PRIORITY[String(stage||'').toUpperCase()]||99}
+function technicalDealLabel(v,id=''){
+  const x=String(v||'').trim(),did=String(id||'').trim();
+  if(!x||x===did)return true;
+  return /^[A-Za-z0-9_-]{16,}$/.test(x)&&!/\s/.test(x);
+}
+
 function dateOnly(v){
   const x=String(v||'').trim();
   const m=x.match(/^(\d{4}-\d{2}-\d{2})/);
@@ -96,7 +104,7 @@ function addIsoDays(ymd,days){
 }
 function dealStageNorm(d){return String(d?.snapshot?.stageNorm||d?.snapshot?.stage||d?.stageNorm||d?.stage||'').trim().toUpperCase().replace(/\s+/g,' ')}
 function dealOwner(d){return String(d?.snapshot?.owner||d?.owner||'No detectado').trim()||'No detectado'}
-function dealTitle(d){return String(d?.snapshot?.title||d?.title||d?.snapshot?.contactName||d?.contactName||d?.id||'Trato').trim()}
+function dealTitle(d){const id=String(d?.id||'').trim(),v=String(d?.snapshot?.title||d?.title||d?.snapshot?.contactName||d?.contactName||'').trim();return technicalDealLabel(v,id)?'':v}
 function dealConversationId(d){return String(d?.snapshot?.conversationId||d?.conversationId||'').trim()}
 function dealDue(d){return dateOnly(d?.snapshot?.dueDate||d?.portfolio?.dueDate||d?.dueDate)}
 function closeCrmPortfolio(dealStates,date){
@@ -122,10 +130,10 @@ function closeCrmPortfolio(dealStates,date){
       if(due===date)x.dueToday++;
       else if(due<=to7)x.due7++;
       else x.due8to15++;
-      x.vigentDeals.push({id:d.id,title:dealTitle(d),stage,dueDate:due,conversationId:dealConversationId(d)});
+      x.vigentDeals.push({id:d.id,title:dealTitle(d),stage,dueDate:due,conversationId:dealConversationId(d),priority:closeStagePriority(stage)});
     }
   }
-  for(const x of bySeller.values())x.vigentDeals.sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.title.localeCompare(b.title,'es',{sensitivity:'base'}));
+  for(const x of bySeller.values())x.vigentDeals.sort((a,b)=>a.priority-b.priority||a.dueDate.localeCompare(b.dueDate)||String(a.title||'').localeCompare(String(b.title||''),'es',{sensitivity:'base'}));
   const sellers=[...bySeller.values()].sort((a,b)=>b.overdue15-a.overdue15||b.vigent15-a.vigent15||a.seller.localeCompare(b.seller,'es',{sensitivity:'base'}));
   return{
     cutoff15,to15,
@@ -169,10 +177,12 @@ function closeText({date,base,rows,dealStates=[]}){
   vigentSellers.forEach(x=>{
     L.push('',`• ${x.seller}: ${x.vigent15} vigentes · hoy ${x.dueToday} · próximos 7 días ${x.due7} · días 8–15 ${x.due8to15}`,
       `  Etapas: ${shortStageBreakdown(x.stagesVigent15)}`);
-    x.vigentDeals.slice(0,3).forEach(d=>{
-      L.push(`  → ${d.dueDate} · ${d.stage.replaceAll('_',' ')} · ${d.title}${d.conversationId?` · HUB: ${hubUrl(d.conversationId)}`:''}`);
+    L.push('  🎯 A EMPUJAR HOY:');
+    x.vigentDeals.slice(0,5).forEach((d,i)=>{
+      const label=d.title||'Cliente sin nombre';
+      L.push(`  ${i+1}. ${d.dueDate} · ${d.stage.replaceAll('_',' ')} · ${label}${d.conversationId?` · HUB: ${hubUrl(d.conversationId)}`:''}`);
     });
-    if(x.vigentDeals.length>3)L.push(`  → +${x.vigentDeals.length-3} trato(s) más dentro de la ventana 0–15 días`);
+    if(x.vigentDeals.length>5)L.push(`  → +${x.vigentDeals.length-5} trato(s) más dentro de la ventana 0–15 días`);
   });
 
   L.push('','🔥 OPORTUNIDADES DEL DÍA');
@@ -186,7 +196,31 @@ function closeText({date,base,rows,dealStates=[]}){
 
 function manualReportKey(date,cutoff=17,sellerKey=null){const seller=sellerKey?`__seller_${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`:'';return `${date}__cutoff_${Number(cutoff)}__guide_v1_product_context_v1${seller}`}
 class ManualSupervisionService{
-  constructor({dailyService,store}){this.dailyService=dailyService;this.store=store}
+  constructor({dailyService,store}){this.dailyService=dailyService;this.store=store;this.crm=dailyService?.crm||null}
+  async enrichClosingDeals(dealStates,date){
+    if(!this.crm?.getDeal)return dealStates;
+    const portfolio=closeCrmPortfolio(dealStates,date),wanted=new Set();
+    for(const seller of portfolio.sellers){
+      for(const d of seller.vigentDeals.slice(0,5)){
+        if(!d.title)wanted.add(String(d.id));
+      }
+    }
+    if(!wanted.size)return dealStates;
+    const byId=new Map((dealStates||[]).map(d=>[String(d.id),d]));
+    for(const id of wanted){
+      try{
+        const live=await this.crm.getDeal(id);
+        if(!live)continue;
+        const state=byId.get(String(id));if(!state)continue;
+        state.snapshot={...(state.snapshot||{}),
+          title:technicalDealLabel(live.title,id)?(state.snapshot?.title||''):live.title,
+          conversationId:live.conversationId||state.snapshot?.conversationId||null,
+          contactId:live.contactId||state.snapshot?.contactId||null
+        };
+      }catch(_){}
+    }
+    return dealStates;
+  }
   async base(date,cutoff=17,forceAi=false,sellerKey=null){
     const reportKey=manualReportKey(date,cutoff,sellerKey);
     if(!forceAi){
@@ -197,6 +231,6 @@ class ManualSupervisionService{
   }
   async liveSeller({date,cutoff=17,sellerKey,sellerLabel,forceAi=true}){const base=await this.base(date,cutoff,forceAi,sellerKey),rows=(base.rows||[]).filter(r=>sellerMatch(r,sellerKey));const previous=(await this.store.listLiveDailyReports(300,date)).find(r=>r.reportType==='supervisor_live_operational'&&norm(r.sellerKey)===norm(sellerKey)&&Number(r.cutoff||0)<Number(cutoff));const ms=metrics(rows),trend=trendFrom(previous,ms);const observations=await this.store.listLiveDailyObservationsForSellers([sellerKey],2000);const statuses={};for(const o of observations)if(String(o.sourceDate||'')===String(date)&&o.conversationId)statuses[o.conversationId]=humanCorrectionStatus(o.status);const report={id:`manual_live__${date}__${cutoff}__${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`,reportType:'supervisor_live_operational',date,cutoff:Number(cutoff),sellerKey:norm(sellerKey),sellerLabel,generatedAt:new Date().toISOString(),metrics:ms,cases:rows.filter(x=>x.inboundCount>0).map(rowCase),trend,text:liveText({date,cutoff,label:sellerLabel||sellerKey,rows,trend,correctionStatuses:statuses})};await this.store.saveLiveDailyReport(report.id,report);return report}
   async superSupervisor({date,cutoff=10,forceAi=true}){const base=await this.base(date,cutoff,forceAi),rows=base.rows||[];const report={id:`super_supervisor__${date}__${cutoff}`,reportType:'super_supervisor',date,cutoff:Number(cutoff),generatedAt:new Date().toISOString(),metrics:metrics(rows),text:superText({date,cutoff,rows})};await this.store.saveLiveDailyReport(report.id,report);return report}
-  async closing({date,forceAi=true}){const base=await this.base(date,17,forceAi),dealStates=await this.store.listAllDeals(20000),rows=base.rows||[];const report={id:`gerencial_close__${date}`,reportType:'gerencial_close',date,cutoff:17,generatedAt:new Date().toISOString(),metrics:metrics(rows),text:closeText({date,base,rows,dealStates})};await this.store.saveLiveDailyReport(report.id,report);return report}
+  async closing({date,forceAi=true}){const base=await this.base(date,17,forceAi),dealStates=await this.store.listAllDeals(20000),rows=base.rows||[];await this.enrichClosingDeals(dealStates,date);const report={id:`gerencial_close__${date}`,reportType:'gerencial_close',date,cutoff:17,generatedAt:new Date().toISOString(),metrics:metrics(rows),text:closeText({date,base,rows,dealStates})};await this.store.saveLiveDailyReport(report.id,report);return report}
 }
-module.exports={ManualSupervisionService,manualReportKey,rowCase,metrics,needsCorrection,severity,product,profile,checklist,liveText,superText,closeText,closeCrmPortfolio};
+module.exports={ManualSupervisionService,manualReportKey,rowCase,metrics,needsCorrection,severity,product,profile,checklist,liveText,superText,closeText,closeCrmPortfolio,closeStagePriority,technicalDealLabel};

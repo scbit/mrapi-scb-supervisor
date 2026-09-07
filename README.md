@@ -250,3 +250,20 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Nuevo bloque por vendedor: vigentes con dueDate entre hoy y +15 días.
 - Para vigentes muestra hoy / próximos 7 / días 8–15, desglose por etapa y hasta 3 tratos concretos para empujar cierre.
 - Los miles de tratos históricos NO disparan análisis OpenAI.
+
+## v0.13.16 — Ranking determinístico “A EMPUJAR HOY”
+- NO modifica SUPER SUPERVISOR.
+- NO modifica `🔥 OPORTUNIDADES DEL DÍA`.
+- NO modifica `📋 RESUMEN POR VENDEDOR`.
+- En vigentes 0–15 días, prioriza sin IA por etapa:
+  1. HORNO
+  2. COTIZADO PARA ENVIAR
+  3. PARA COTIZAR
+  4. ESPERANDO PI
+  5. SEGUIMIENTO
+  6. MARCA PERSONAL
+- Dentro de la misma prioridad, ordena por vencimiento más cercano.
+- Muestra hasta 5 tratos concretos por vendedor bajo `🎯 A EMPUJAR HOY`.
+- No muestra IDs técnicos como nombre de cliente/trato.
+- Si el snapshot local todavía no tiene título, consulta solamente esos top picks contra CRM con `getDeal` (lectura puntual, sin OpenAI) para recuperar el nombre y conversationId.
+- El engine ahora persiste `title` en snapshots CRM para futuras sincronizaciones, reduciendo esas lecturas puntuales.
