@@ -117,7 +117,7 @@ function analyzeConversation(conversation,messages,range,lateMinutes=30){
     needsHumanNow:noHumanResponse||botOnly||pendingClientMessages>0||leadActivationInsufficient,pendingClientMessages,
     avgHumanResponseMinutes:avg,avgResponseMinutes:avg,maxHumanResponseMinutes:max,lateCount:lateResponses.length,lateResponses,
     lastActor:lastWin?actor(lastWin):'',lastClientAt:lastClient?.timestamp||'',lastHumanAt:lastHuman?.timestamp||'',lastBotAt:lastBot?.timestamp||'',
-    lastClientText:textForReport(lastClient).slice(0,300),clientTexts:inbound.map(m=>textForReport(m).slice(0,700)).filter(Boolean),lastHumanText:textForReport(lastHuman).slice(0,300),
+    lastClientText:textForReport(lastClient).slice(0,300),clientTexts:inbound.map(m=>textForReport(m).slice(0,700)).filter(Boolean),botTexts:bot.slice(-5).map(m=>textForReport(m).slice(0,700)).filter(Boolean),lastHumanText:textForReport(lastHuman).slice(0,300),
     humanTexts:human.slice(-5).map(m=>({at:m.timestamp,user:m.user||seller,text:textForReport(m).slice(0,500)})),
     followUpAttemptsAfterLastClient,followUpAttemptsInWindow,sellerFollowUpInWindow,followUpOk,readyToDiscardNoResponse,
     adBootstrapIgnored,ignoredAdBootstrapCount:ignoredAdIds.size,noRealCustomerReply,

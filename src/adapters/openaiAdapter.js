@@ -65,9 +65,12 @@ Criterio comercial — Guía SCB v1.0:
 - Si después del CTA publicitario el cliente nunca respondió de verdad, el primer día de intervención humana es ACTIVACIÓN INICIAL: el vendedor debe intentar como mínimo 3 contactos útiles ese día para forzar una respuesta.
 - Si esos 3 intentos no logran respuesta, el caso pasa a SEGUIMIENTO PASIVO: nuevo contacto cada 7 a 10 días y la próxima fecha del CRM debe mantenerse vigente, nunca vencida.
 - Un único 'Hola, ¿cómo estás?' en la activación inicial es insuficiente aunque exista un mensaje automático de publicidad previo.
-- Para detectar producto, revisá TODOS los mensajes reales del cliente en la transcripción, no solo el último. Ejemplo: si dice 'importar una casa prefabricada y un auto', product_defined=true.
-- Ignorar el CTA automático de Meta Ads para métricas NO significa ignorar mensajes reales posteriores del cliente.
-- No inventes producto. Si realmente no aparece, product_defined=false y product_name=''.
+- Para detectar producto, revisá TODA la conversación útil, no solo el último mensaje: CLIENTE + BOT + VENDEDOR HUMANO.
+- Si el producto quedó explícitamente identificado en el diálogo aunque lo haya formulado el BOT o lo haya confirmado el vendedor, product_defined=true y product_name debe contenerlo.
+- Ejemplo: si el cliente dice 'importar una casa prefabricada y un auto', product_defined=true.
+- Ejemplo: si el bot/humano ya identifica explícitamente 'cortadora circular de carpintero de mano' y el resto del chat confirma que hablan de ese producto, product_defined=true.
+- Ignorar el CTA automático de Meta Ads para métricas NO significa borrar contexto comercial real del resto del chat.
+- No inventes producto. Solo usar un nombre que esté explícitamente respaldado por la conversación; si realmente no aparece, product_defined=false y product_name=''.
 - product_source debe ser CLIENTE si el cliente ya lo dijo/mandó, VENDEDOR_DESCUBRIO si surge porque el vendedor preguntó bien, o NO_CLARO.
 
 Criterio comercial:
@@ -114,6 +117,7 @@ Devolvé SOLO JSON válido con esta estructura:
   "unexplored_potential": false,
   "product_defined": false,
   "product_name": "",
+  "product_evidence": "",
   "product_source": "NO_CLARO",
   "seller_discovered_product": false,
   "customer_profile_type": "DESCONOCIDO",

@@ -195,3 +195,12 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Caso Bety incorporado como regla de calibración: producto + intención + cantidad, pero sin proveedor; si se la manda sola a Alibaba sin guía ni retorno con links/MOQ/precio/peso/medidas, queda A CORREGIR.
 - Si el propio análisis dice que no quedó próximo paso, no se transformó en oportunidad, no avanzó demasiado o faltó acompañamiento, no puede quedar BIEN TRABAJADO.
 - Nueva caché `guide_v1_concrete_advance_v1`.
+
+## v0.13.10 — Producto desde contexto completo
+- No cambia la lógica comercial aprobada de v0.13.9.
+- Corrige únicamente detección/presentación de producto.
+- El producto puede tomarse de contexto explícito CLIENTE + BOT + HUMANO, no solo del último mensaje del cliente.
+- Un `product_name` explícito ya no se descarta por inconsistencia de `product_defined=false`.
+- El row conserva también textos BOT para fallback de contexto.
+- Caso de calibración: Walid debe poder recuperar `cortadora circular de carpintero de mano`.
+- Nueva caché `guide_v1_product_context_v1`.
