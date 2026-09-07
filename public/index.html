@@ -11,7 +11,7 @@
   </div>
   <div id="authStatus" class="authStatus">Esperando autenticación.</div>
 </div>
-<div class="statusbar"><div class="stat"><div class="k">Supervisor</div><div class="v" id="stHealth">—</div></div><div class="stat"><div class="k">Scheduler</div><div class="v" id="stScheduler">NO CONECTADO</div></div><div class="stat"><div class="k">Modo Telegram</div><div class="v" id="stMode">DRY_RUN</div></div><div class="stat"><div class="k">Versión</div><div class="v">v0.13.20</div></div></div>
+<div class="statusbar"><div class="stat"><div class="k">Supervisor</div><div class="v" id="stHealth">—</div></div><div class="stat"><div class="k">Scheduler</div><div class="v" id="stScheduler">NO CONECTADO</div></div><div class="stat"><div class="k">Modo Telegram</div><div class="v" id="stMode">DRY_RUN</div></div><div class="stat"><div class="k">Versión</div><div class="v">v0.13.21</div></div></div>
 <section class="card span12" style="margin-bottom:16px">
 <h2>Control de automatización</h2>
 <div class="sub">Cada producto se activa o desactiva por separado. Los botones manuales siguen funcionando aunque su automático esté apagado.</div>
@@ -19,6 +19,14 @@
   <div class="autoBox"><h3>1 · Supervisor en Vivo</h3><div class="mini">L–V 09:00–17:00 · pausa 12:00–13:00 · cada 45 min</div><div class="switchLine"><input id="autoLive" type="checkbox"><label for="autoLive">Automático</label><span id="autoLiveState" class="autoState"></span></div></div>
   <div class="autoBox"><h3>2 · SUPER SUPERVISOR</h3><div class="mini">L–V · 10:00 y 14:00</div><div class="switchLine"><input id="autoSuper" type="checkbox"><label for="autoSuper">Automático</label><span id="autoSuperState" class="autoState"></span></div></div>
   <div class="autoBox"><h3>3 · Cierre Diario Gerencial</h3><div class="mini">L–V · horario configurable</div><div class="switchLine"><input id="autoClose" type="checkbox"><label for="autoClose">Automático</label><span id="autoCloseState" class="autoState"></span></div><div style="margin-top:8px"><label>Horario</label><select id="autoCloseTime"><option value="17:00">17:00</option><option value="17:15">17:15</option><option value="17:30">17:30</option></select></div></div>
+</div>
+<div class="autoBox" style="margin-top:12px">
+  <h3>Telegram automático</h3>
+  <div class="mini">Controla solamente los envíos automáticos. Los botones manuales de envío siguen funcionando.</div>
+  <div class="row" style="margin-top:8px">
+    <div class="field"><label>Modo</label><select id="autoTelegramMode"><option value="DRY_RUN">DRY_RUN · no enviar automáticamente</option><option value="LIVE">LIVE · enviar automáticamente</option></select></div>
+    <div class="field big"><label>Estado</label><div id="autoTelegramState" class="autoState" style="padding:11px 0">—</div></div>
+  </div>
 </div>
 <div class="row" style="margin-top:12px"><button class="btn primary" onclick="saveAutomationControls()">Guardar automatización</button><button class="btn green" onclick="resumeMasterAutomation()">Reanudar motor automático</button><button class="btn red" onclick="pauseMasterAutomation()">Pausar todo automático</button></div>
 <div id="autoControlStatus" class="sub" style="margin-top:10px">Cargando configuración…</div>
@@ -111,27 +119,40 @@ function tgOptions(selected){
 function paintAutomationStates(){
   const set=(el,on)=>{el.textContent=on?'ACTIVADO':'DESACTIVADO';el.className='autoState '+(on?'autoOn':'autoOff')};
   set(autoLiveState,autoLive.checked);set(autoSuperState,autoSuper.checked);set(autoCloseState,autoClose.checked);
+  const live=autoTelegramMode.value==='LIVE';
+  autoTelegramState.textContent=live?'LIVE · ENVÍO AUTOMÁTICO REAL':'DRY_RUN · SIN ENVÍOS AUTOMÁTICOS';
+  autoTelegramState.className='autoState '+(live?'autoOn':'autoOff');
 }
 function renderAutomationControls(){
   const wd=window.setup?.settings?.weekday||{};
+  const ld=window.setup?.settings?.liveDaily||{};
   autoLive.checked=wd.liveAutoEnabled===true;
   autoSuper.checked=wd.superAutoEnabled===true;
   autoClose.checked=wd.closingAutoEnabled===true;
   autoCloseTime.value=wd.closingAutoTime||'17:00';
+  autoTelegramMode.value=String(ld.deliveryMode||'DRY_RUN').toUpperCase()==='LIVE'?'LIVE':'DRY_RUN';
   paintAutomationStates();
 }
-[()=>autoLive,()=>autoSuper,()=>autoClose].forEach(f=>{setTimeout(()=>{const el=f();if(el)el.addEventListener('change',paintAutomationStates)},0)});
+[()=>autoLive,()=>autoSuper,()=>autoClose,()=>autoTelegramMode].forEach(f=>{setTimeout(()=>{const el=f();if(el)el.addEventListener('change',paintAutomationStates)},0)});
 async function saveAutomationControls(){
+  const mode=autoTelegramMode.value==='LIVE'?'LIVE':'DRY_RUN';
+  if(mode==='LIVE'&&String(window.setup?.settings?.liveDaily?.deliveryMode||'DRY_RUN').toUpperCase()!=='LIVE'){
+    if(!confirm('Vas a habilitar ENVÍOS AUTOMÁTICOS REALES por Telegram para los productos que estén ON. ¿Continuar?'))return;
+  }
   autoControlStatus.textContent='Guardando…';
   try{
-    await req('/api/supervisor/network/setup',{method:'POST',headers:H(true),body:JSON.stringify({settings:{weekday:{
-      liveAutoEnabled:autoLive.checked,
-      superAutoEnabled:autoSuper.checked,
-      closingAutoEnabled:autoClose.checked,
-      closingAutoTime:autoCloseTime.value||'17:00'
-    }}})});
+    await req('/api/supervisor/network/setup',{method:'POST',headers:H(true),body:JSON.stringify({settings:{
+      liveDaily:{deliveryMode:mode},
+      weekday:{
+        liveAutoEnabled:autoLive.checked,
+        superAutoEnabled:autoSuper.checked,
+        closingAutoEnabled:autoClose.checked,
+        closingAutoTime:autoCloseTime.value||'17:00'
+      }
+    }})});
     await loadSetup();
-    autoControlStatus.textContent=`Guardado · En Vivo ${autoLive.checked?'ON':'OFF'} · SUPER ${autoSuper.checked?'ON':'OFF'} · Cierre ${autoClose.checked?'ON':'OFF'}`;
+    await refreshHealth();
+    autoControlStatus.textContent=`Guardado · En Vivo ${autoLive.checked?'ON':'OFF'} · SUPER ${autoSuper.checked?'ON':'OFF'} · Cierre ${autoClose.checked?'ON':'OFF'} · Telegram ${mode}`;
   }catch(e){autoControlStatus.textContent='ERROR: '+e.message}
 }
 async function resumeMasterAutomation(){

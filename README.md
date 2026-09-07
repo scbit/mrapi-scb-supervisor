@@ -305,3 +305,10 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - La causa era que el evento `change` volvía a renderizar desde la configuración guardada (todavía OFF).
 - Ahora el click solo actualiza el estado visual local.
 - `Guardar automatización` persiste los tres valores y luego refresca desde backend.
+
+## v0.13.21 — Telegram automático DRY_RUN / LIVE
+- Control visible para habilitar o bloquear envíos automáticos reales.
+- DRY_RUN no envía Telegram desde Scheduler; LIVE sí, únicamente para productos ON.
+- Confirmación explícita antes de pasar a LIVE.
+- Los envíos manuales siguen disponibles.
+- El tick general y el Scheduler dedicado de SUPER respetan esta compuerta.

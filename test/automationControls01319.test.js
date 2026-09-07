@@ -32,7 +32,7 @@ test('0.13.19 control save persists each product independently',()=>{
 
 test('0.13.19 existing 15 minute tick runs approved product automation',()=>{
  const s=fs.readFileSync('src/http/app.js','utf8');
- assert.ok(s.includes('runProductAutomation({now,send})'));
+ assert.ok(s.includes('runProductAutomation({now,send:automaticSend})'));
  assert.ok(s.includes('runApprovedLiveAuto'));
  assert.ok(s.includes('runApprovedSuperAuto'));
  assert.ok(s.includes('runApprovedCloseAuto'));
@@ -40,7 +40,7 @@ test('0.13.19 existing 15 minute tick runs approved product automation',()=>{
 
 test('0.13.19 weekday legacy tick does not send duplicate seller telegram',()=>{
  const s=fs.readFileSync('src/http/app.js','utf8');
- assert.ok(s.includes('send:isWeekend?send:false'));
+ assert.ok(s.includes('send:isWeekend?automaticSend:false'));
 });
 
 test('0.13.19 approved live automatic reuses one global base and same live formatter',()=>{

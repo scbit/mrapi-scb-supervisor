@@ -146,11 +146,14 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
 
   app.post('/api/supervisor/remote/tick',auth,async(q,r)=>{try{
     if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');
-    const now=q.body?.now?new Date(q.body.now):new Date(),send=q.body?.send!==false,source=q.body?.source==='scheduler'?'scheduler':'manual';
+    const now=q.body?.now?new Date(q.body.now):new Date(),requestedSend=q.body?.send!==false,source=q.body?.source==='scheduler'?'scheduler':'manual';
+    const setup=await remoteService.getNetworkSetup();
+    const deliveryMode=String(setup.settings?.liveDaily?.deliveryMode||'DRY_RUN').toUpperCase();
+    const automaticSend=requestedSend&&deliveryMode==='LIVE';
     const p=localAutomationParts(now),isWeekend=['Sat','Sun'].includes(p.weekday);
-    const core=await remoteService.automationTick({engine,now,send:isWeekend?send:false,force:q.body?.force===true,source});
-    const products=(!core?.skipped||core?.reason==='SAFETY_LIMIT_REACHED'?await runProductAutomation({now,send}):{skipped:true,reason:core?.reason||'CORE_TICK_SKIPPED'});
-    r.json({ok:true,...core,productAutomation:products});
+    const core=await remoteService.automationTick({engine,now,send:isWeekend?automaticSend:false,force:q.body?.force===true,source});
+    const products=(!core?.skipped||core?.reason==='SAFETY_LIMIT_REACHED'?await runProductAutomation({now,send:automaticSend}):{skipped:true,reason:core?.reason||'CORE_TICK_SKIPPED'});
+    r.json({ok:true,...core,deliveryMode,automaticSend,productAutomation:products});
   }catch(e){r.status(500).json({ok:false,error:e.message,health:remoteService?await remoteService.getAutomationHealth().catch(()=>null):null})}});
   app.get('/api/supervisor/automation/health',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.getAutomationHealth()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/pause',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.pauseAutomation(q.body?.reason||'MANUAL_PAUSE')})}catch(e){r.status(500).json({ok:false,error:e.message})}});
@@ -183,6 +186,7 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     const date=`${parts.year}-${parts.month}-${parts.day}`,weekday=parts.weekday,hour=Number(parts.hour),minute=Number(parts.minute),force=q.body?.force===true;
     const setup=await remoteService.getNetworkSetup();
     if(!force&&setup.settings?.weekday?.superAutoEnabled!==true)return r.json({ok:true,skipped:true,reason:'SUPER_AUTO_DISABLED',date});
+    if(!force&&String(setup.settings?.liveDaily?.deliveryMode||'DRY_RUN').toUpperCase()!=='LIVE')return r.json({ok:true,skipped:true,reason:'TELEGRAM_DRY_RUN',date});
     if(!force&&!['Mon','Tue','Wed','Thu','Fri'].includes(weekday))return r.json({ok:true,skipped:true,reason:'SUPER_OUTSIDE_WEEKDAY',date});
     const cutoff=Number(q.body?.cutoff||(hour>=14?14:10));
     if(![10,14].includes(cutoff))throw new Error('SUPER_CUTOFF_INVALID');
