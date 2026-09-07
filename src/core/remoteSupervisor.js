@@ -376,6 +376,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
       lastError:health.lastError||null,
       consecutiveFailures:Number(health.consecutiveFailures||0),
       lastCore:health.lastCore||null,
+      lastWarnings:Array.isArray(health.lastWarnings)?health.lastWarnings:[],
       lastResultSummary:health.lastResultSummary||null,
       lock:lock.locked===true&&(!lock.expiresAt||new Date(lock.expiresAt)>new Date())?{locked:true,owner:lock.owner||null,acquiredAt:lock.acquiredAt||null,expiresAt:lock.expiresAt||null}:{locked:false}
     };
@@ -414,14 +415,31 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
       const hitDealCap=core.crmMode==='incremental'&&Number(core.processedDeals||0)>=limits.deals;
       const hitHunterCap=Number(core.processedHunterEvents||0)>=limits.hunter;
       const timedOut=elapsedCore>limits.seconds*1000;
-      if(hitConversationCap||hitDealCap||hitHunterCap||timedOut){
-        const reasons=[hitConversationCap?'CONVERSATION_READ_CAP':null,hitDealCap?'DEAL_READ_CAP':null,hitHunterCap?'HUNTER_READ_CAP':null,timedOut?'TICK_TIMEOUT':null].filter(Boolean);
-        await this.store.saveRemoteCheckpoint('automation_health',{
-          running:false,autoPaused:true,pauseReason:reasons.join('+'),lastError:`Safety stop: ${reasons.join(', ')}`,
-          lastDurationMs:Date.now()-started,lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode}
+      const backlogWarnings=[hitConversationCap?'CONVERSATION_READ_CAP':null,hitDealCap?'DEAL_READ_CAP':null,hitHunterCap?'HUNTER_READ_CAP':null].filter(Boolean);
+
+      // Hitting a configured page/read cap means "there may be more backlog".
+      // It is NOT an automation failure and must not pause the supervisor.
+      // The next 15-minute tick continues incrementally from checkpoints.
+      if(backlogWarnings.length){
+        await this.store.saveRemoteCheckpoint('automation_backlog_warning',{
+          at:now.toISOString(),warnings:backlogWarnings,
+          processedConversations:core.processedConversations,
+          processedDeals:core.processedDeals,
+          processedHunterEvents:core.processedHunterEvents,
+          crmMode:core.crmMode
         });
-        await this.saveCriticalSystemIncident('SAFETY_LIMIT_REACHED',reasons.join('+'),{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode});
-        return{skipped:true,reason:'SAFETY_LIMIT_REACHED',reasons,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},health:await this.getAutomationHealth()};
+      }
+
+      // A real wall-clock timeout is still fail-closed.
+      if(timedOut){
+        const reasons=['TICK_TIMEOUT'];
+        await this.store.saveRemoteCheckpoint('automation_health',{
+          running:false,autoPaused:true,pauseReason:'TICK_TIMEOUT',lastError:'Safety stop: TICK_TIMEOUT',
+          lastDurationMs:Date.now()-started,lastWarnings:backlogWarnings,
+          lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode}
+        });
+        await this.saveCriticalSystemIncident('SAFETY_LIMIT_REACHED','TICK_TIMEOUT',{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode});
+        return{skipped:true,reason:'SAFETY_LIMIT_REACHED',reasons,backlogWarnings,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},health:await this.getAutomationHealth()};
       }
 
       const result=await this.tick({now,send});
@@ -443,6 +461,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
         running:false,autoPaused:false,pauseReason:null,lastSuccessAt:new Date().toISOString(),lastDurationMs:Date.now()-started,
         consecutiveFailures:0,lastError:null,
         lastCore:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},
+        lastWarnings:backlogWarnings,
         lastResultSummary:summary
       });
       if(source==='scheduler')await this.store.saveRemoteCheckpoint('scheduler_heartbeat',{at:now.toISOString(),mode:result.mode||'tick',lastSuccessAt:new Date().toISOString()});

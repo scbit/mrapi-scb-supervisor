@@ -312,3 +312,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Confirmación explícita antes de pasar a LIVE.
 - Los envíos manuales siguen disponibles.
 - El tick general y el Scheduler dedicado de SUPER respetan esta compuerta.
+
+## v0.13.22 — No auto-pausar por backlog normal
+- Corrige el motivo por el que el Supervisor podía volver a `PAUSED` después de un tick.
+- Alcanzar exactamente los límites de lectura (250 conversaciones / 2000 deals / 5000 Hunter) ahora se interpreta como backlog paginado, no como falla.
+- El motor guarda una advertencia y continúa incrementalmente en el próximo tick de 15 minutos.
+- Solo un timeout real sigue siendo un safety stop que auto-pausa.
+- La UI muestra claramente `pauseReason` o warnings de backlog.
+- No cambia los 3 switches, Telegram LIVE, horarios ni los botones manuales.
