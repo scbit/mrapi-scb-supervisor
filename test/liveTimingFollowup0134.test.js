@@ -10,7 +10,7 @@ test('0.13.4 live report shows exact late duration and max delay',()=>{
  assert.ok(!t.includes('Producto descubierto por'));
 });
 test('0.13.4 live report exposes correct follow-ups separately',()=>{
- const row={conversationId:'2',contactName:'Dormido',seller:'x',inboundCount:0,humanResponded:true,humanCount:1,followUpOk:true,sellerFollowUpInWindow:true,followUpAttemptsAfterLastClient:3,ai:{}};
+ const row={conversationId:'2',contactName:'Dormido',seller:'x',inboundCount:0,humanResponded:true,humanCount:1,followUpOk:true,followUpCorrect:true,sellerFollowUpInWindow:true,followUpAttemptsAfterLastClient:3,ai:{}};
  const t=liveText({date:'2026-09-04',cutoff:17,label:'Augusto',rows:[row]});
  assert.ok(t.includes('Seguimientos correctos: 1'));
  assert.ok(t.includes('SEGUIMIENTOS CORRECTOS'));

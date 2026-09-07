@@ -153,3 +153,12 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Cada cliente a corregir muestra `Respuesta: A TIEMPO / TARDE / SIN RESPUESTA` con duración cuando existe.
 - Se agrega `Seguimientos correctos` al resumen.
 - Se agrega sección separada `SEGUIMIENTOS CORRECTOS` para no castigar seguimientos válidos a clientes que dejaron de responder.
+
+## v0.13.5 — Seguimiento comercial con contexto BOT
+- Un seguimiento ya no es correcto solo porque el vendedor volvió a escribir.
+- Los chats de seguimiento también pasan por IA cuando hubo intervención humana.
+- Si el bot ya descubrió producto/negocio/intención, el humano debe continuar desde ese contexto.
+- Saludos genéricos o '¿seguís interesado?' sin avance se clasifican como seguimiento INSUFICIENTE.
+- Seguimiento correcto exige avanzar: modalidad (courier/marítimo según cantidad), volumen/proveedor/origen, recomendación SCB o próximo paso concreto.
+- Un seguimiento insuficiente entra en CLIENTES A CORREGIR y sale de SEGUIMIENTOS CORRECTOS.
+- Nueva caché `guide_v1_followup_v2` para no reutilizar análisis anteriores.

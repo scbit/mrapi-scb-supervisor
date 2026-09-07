@@ -43,6 +43,9 @@ Criterio comercial — Guía SCB v1.0:
 - Es falla grave cerrar con 'avisame', 'buscá en Alibaba' o 'pensalo' sin guía concreta cuando hay oportunidad o necesidad de orientación.
 - Checklist de chat bien trabajado: entendió negocio, sabe experiencia importadora, sabe proveedor, explicó valor SCB adaptado, dio recomendación útil y dejó próximo paso.
 - Falla HIPER_GRAVE: (a) perfil inversor/sin producto y lo manda solo a Alibaba sin discovery; (b) importador experimentado tratado como novato con explicación irrelevante en vez de optimización; (c) producto concreto + intención real y el vendedor la despacha/cierra sin desarrollar ni dejar avance.
+- Si el BOT ya descubrió producto, uso, negocio, proveedor, intención u otros datos, el VENDEDOR HUMANO debe CONTINUAR desde ese contexto. Repetir discovery ya resuelto o entrar con un saludo genérico sin avanzar NO es seguimiento correcto.
+- Un seguimiento humano solo es CORRECTO si aprovecha el contexto previo y hace avanzar la oportunidad: por ejemplo recomienda courier/marítimo según cantidad, pide volumen/proveedor/origen cuando falta, explica valor SCB o deja próximo paso concreto.
+- Mensajes como 'Hola, ¿cómo estás?', '¿seguís interesado?', 'cualquier cosa avisame' o equivalentes, por sí solos, son seguimiento INSUFICIENTE cuando el cliente ya mostró interés o el bot ya había hecho discovery.
 - No inventes producto. Si no es claro, product_defined=false y product_name=''.
 - product_source debe ser CLIENTE si el cliente ya lo dijo/mandó, VENDEDOR_DESCUBRIO si surge porque el vendedor preguntó bien, o NO_CLARO.
 
@@ -107,7 +110,11 @@ Devolvé SOLO JSON válido con esta estructura:
   },
   "grave_failure": false,
   "grave_failure_level": "NONE",
-  "grave_failure_reason": ""
+  "grave_failure_reason": "",
+  "follow_up_quality": "NO_APLICA",
+  "follow_up_reason": "",
+  "follow_up_expected_action": "",
+  "used_bot_context": false
 }`;
     const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${this.apiKey}`,'Content-Type':'application/json'},body:JSON.stringify({model:this.model,input:[{role:'system',content:'Respondé únicamente JSON válido. No agregues markdown.'},{role:'user',content:prompt}]})});
     const raw=await response.text();if(!response.ok)throw new Error(`OpenAI error ${response.status}: ${raw}`);
