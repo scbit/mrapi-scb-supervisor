@@ -93,7 +93,7 @@ class RemoteSupervisorService{
 
   defaultNetworkSettings(){
     return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:true,deliveryMode:'DRY_RUN',safety:{maxConversationsPerTick:250,maxDealsPerTick:2000,maxHunterEventsPerTick:5000,maxTelegramPerTick:25,maxTickSeconds:180,maxConsecutiveFailures:3,lockMinutes:15}},
-      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:45,generalFrequencyMinutes:60,generalChatId:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
+      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:45,generalFrequencyMinutes:60,generalChatId:null,superSupervisorChatId:null,superSupervisorChatTitle:null,closingChatId:null,closingChatTitle:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
       weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
     };
   }

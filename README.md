@@ -219,3 +219,13 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Los Chat IDs quedan internos.
 - Para grupos configurados que ya no aparecen en `getUpdates`, usa Telegram `getChat(chat_id)` para recuperar el título.
 - Persiste `telegramChatTitle` junto al destino.
+
+## v0.13.13 — Prueba masiva + destinos gerenciales separados
+- Agrega botón `PROBAR TODOS LOS GRUPOS AHORA`.
+- La prueba usa el mismo Supervisor en Vivo manual aprobado, vendedor por vendedor, con Fecha/Corte seleccionados.
+- Envía un reporte real a cada vendedor activo con grupo Telegram configurado y muestra resultado ✅/❌ por grupo.
+- La prueba manual no depende del gate automático de 45 minutos.
+- SUPER SUPERVISOR tiene su propio grupo Telegram (`superSupervisorChatId`).
+- Cierre Diario Gerencial tiene su propio grupo Telegram (`closingChatId`).
+- Los botones manuales de SUPER y Cierre envían únicamente a sus destinos específicos.
+- Se conservan nombres visibles de grupos y Chat IDs internos.
