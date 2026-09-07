@@ -82,7 +82,76 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
   app.post('/api/supervisor/remote/action',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,action:await remoteService.createAction(q.body||{})})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/remote/verify',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,actions:await remoteService.verifyPending({limit:q.body?.limit||100})})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/remote/run',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');const supervisorId=String(q.body?.supervisorId||'').trim();if(!supervisorId)throw new Error('REMOTE_SUPERVISOR_ID_REQUIRED');r.json({ok:true,result:await remoteService.runSupervisor(supervisorId,{now:q.body?.now?new Date(q.body.now):new Date(),send:q.body?.send!==false,force:q.body?.force===true})})}catch(e){r.status(500).json({ok:false,error:e.message})}});
-  app.post('/api/supervisor/remote/tick',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');const now=q.body?.now?new Date(q.body.now):new Date();r.json({ok:true,...await remoteService.automationTick({engine,now,send:q.body?.send!==false,force:q.body?.force===true,source:q.body?.source==='scheduler'?'scheduler':'manual'})})}catch(e){r.status(500).json({ok:false,error:e.message,health:remoteService?await remoteService.getAutomationHealth().catch(()=>null):null})}});
+  function localAutomationParts(now,tz='America/Argentina/Buenos_Aires'){
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+    return{date:`${parts.year}-${parts.month}-${parts.day}`,weekday:parts.weekday,hour:Number(parts.hour),minute:Number(parts.minute),minutes:Number(parts.hour)*60+Number(parts.minute)}
+  }
+  function hmMinutes(v,def='17:00'){const m=String(v||def).match(/^(\d{1,2}):(\d{2})$/);return m?Number(m[1])*60+Number(m[2]):17*60}
+  async function runApprovedLiveAuto({now,send=true,setup}){
+    const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
+    if(wd.liveAutoEnabled!==true)return{product:'live',skipped:true,reason:'LIVE_AUTO_DISABLED'};
+    if(!(wd.days||[]).includes(p.weekday)||p.minutes<hmMinutes(wd.startTime,'09:00')||p.minutes>=hmMinutes(wd.endTime,'17:00'))return{product:'live',skipped:true,reason:'LIVE_OUTSIDE_SCHEDULE'};
+    if(p.minutes>=hmMinutes(wd.pauseStart,'12:00')&&p.minutes<hmMinutes(wd.pauseEnd,'13:00'))return{product:'live',skipped:true,reason:'LIVE_PAUSE'};
+    const freq=Number(wd.sellerFrequencyMinutes||45),cp=await engine.store.getRemoteCheckpoint('approved_live_auto_last');
+    if(cp?.at&&now-new Date(cp.at)<freq*60000)return{product:'live',skipped:true,reason:'LIVE_FREQUENCY_NOT_DUE',lastAt:cp.at};
+    const groups=(setup.sellerGroups||[]).filter(g=>g.enabled!==false&&g.telegramChatId);
+    if(!groups.length)return{product:'live',skipped:true,reason:'LIVE_NO_CONFIGURED_GROUPS'};
+    const cutoff=Math.min(17,Math.max(10,p.hour+(p.minute>0?1:0)));
+    const base=await manualSupervisionService.base(p.date,cutoff,false,null);
+    const results=[];
+    for(const g of groups){
+      const sellerKey=String(g.sellerId||g.sellers?.[0]||''),sellerLabel=String(g.sellerLabel||g.name||sellerKey);
+      try{
+        const report=await manualSupervisionService.liveSellerFromBase({base,date:p.date,cutoff,sellerKey,sellerLabel});
+        const sent=send?await telegram.send(report.text,g.telegramChatId):null;
+        results.push({sellerKey,sellerLabel,reportId:report.id,sent:!!sent});
+      }catch(e){results.push({sellerKey,sellerLabel,error:e.message})}
+    }
+    await engine.store.saveRemoteCheckpoint('approved_live_auto_last',{at:now.toISOString(),date:p.date,cutoff,results:results.map(x=>({sellerKey:x.sellerKey,sent:x.sent===true,error:x.error||null}))});
+    return{product:'live',skipped:false,date:p.date,cutoff,groups:groups.length,results}
+  }
+  async function runApprovedSuperAuto({now,send=true,setup}){
+    const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
+    if(wd.superAutoEnabled!==true)return{product:'super',skipped:true,reason:'SUPER_AUTO_DISABLED'};
+    if(!(wd.days||[]).includes(p.weekday))return{product:'super',skipped:true,reason:'SUPER_OUTSIDE_WEEKDAY'};
+    const cutoff=p.hour>=14?14:p.hour>=10?10:null;if(!cutoff)return{product:'super',skipped:true,reason:'SUPER_NOT_DUE'};
+    const target=cutoff*60;if(p.minutes<target||p.minutes>=target+30)return{product:'super',skipped:true,reason:'SUPER_OUTSIDE_WINDOW',cutoff};
+    const cpKey=`scheduled_super_sent__${p.date}__${cutoff}`,already=await engine.store.getRemoteCheckpoint(cpKey);
+    if(already?.sentAt)return{product:'super',skipped:true,reason:'SUPER_ALREADY_SENT',cutoff,sentAt:already.sentAt};
+    const chatId=wd.superSupervisorChatId;if(!chatId)return{product:'super',skipped:true,reason:'SUPER_TELEGRAM_NOT_CONFIGURED'};
+    const report=await manualSupervisionService.superSupervisor({date:p.date,cutoff,forceAi:false}),sent=send?await telegram.send(report.text,chatId):null;
+    if(send)await engine.store.saveRemoteCheckpoint(cpKey,{sentAt:new Date().toISOString(),reportId:report.id,chatId,source:'unified_tick'});
+    return{product:'super',skipped:false,date:p.date,cutoff,reportId:report.id,sent:!!sent}
+  }
+  async function runApprovedCloseAuto({now,send=true,setup}){
+    const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
+    if(wd.closingAutoEnabled!==true)return{product:'close',skipped:true,reason:'CLOSE_AUTO_DISABLED'};
+    if(!(wd.days||[]).includes(p.weekday))return{product:'close',skipped:true,reason:'CLOSE_OUTSIDE_WEEKDAY'};
+    const target=hmMinutes(wd.closingAutoTime,'17:00');
+    if(p.minutes<target||p.minutes>=target+30)return{product:'close',skipped:true,reason:'CLOSE_OUTSIDE_WINDOW',target:wd.closingAutoTime||'17:00'};
+    const cpKey=`scheduled_close_sent__${p.date}`,already=await engine.store.getRemoteCheckpoint(cpKey);
+    if(already?.sentAt)return{product:'close',skipped:true,reason:'CLOSE_ALREADY_SENT',sentAt:already.sentAt};
+    const chatId=wd.closingChatId;if(!chatId)return{product:'close',skipped:true,reason:'CLOSE_TELEGRAM_NOT_CONFIGURED'};
+    const report=await manualSupervisionService.closing({date:p.date,forceAi:false}),sent=send?await telegram.send(report.text,chatId):null;
+    if(send)await engine.store.saveRemoteCheckpoint(cpKey,{sentAt:new Date().toISOString(),reportId:report.id,chatId,source:'unified_tick'});
+    return{product:'close',skipped:false,date:p.date,reportId:report.id,sent:!!sent}
+  }
+  async function runProductAutomation({now,send=true}){
+    const setup=await remoteService.getNetworkSetup();
+    const live=await runApprovedLiveAuto({now,send,setup});
+    const superResult=await runApprovedSuperAuto({now,send,setup});
+    const close=await runApprovedCloseAuto({now,send,setup});
+    return{live,super:superResult,close}
+  }
+
+  app.post('/api/supervisor/remote/tick',auth,async(q,r)=>{try{
+    if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');
+    const now=q.body?.now?new Date(q.body.now):new Date(),send=q.body?.send!==false,source=q.body?.source==='scheduler'?'scheduler':'manual';
+    const p=localAutomationParts(now),isWeekend=['Sat','Sun'].includes(p.weekday);
+    const core=await remoteService.automationTick({engine,now,send:isWeekend?send:false,force:q.body?.force===true,source});
+    const products=(!core?.skipped||core?.reason==='SAFETY_LIMIT_REACHED'?await runProductAutomation({now,send}):{skipped:true,reason:core?.reason||'CORE_TICK_SKIPPED'});
+    r.json({ok:true,...core,productAutomation:products});
+  }catch(e){r.status(500).json({ok:false,error:e.message,health:remoteService?await remoteService.getAutomationHealth().catch(()=>null):null})}});
   app.get('/api/supervisor/automation/health',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.getAutomationHealth()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/pause',auth,async(q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.pauseAutomation(q.body?.reason||'MANUAL_PAUSE')})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/automation/resume',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.resumeAutomation()})}catch(e){r.status(500).json({ok:false,error:e.message})}});
@@ -112,6 +181,8 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     const tz='America/Argentina/Buenos_Aires';
     const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
     const date=`${parts.year}-${parts.month}-${parts.day}`,weekday=parts.weekday,hour=Number(parts.hour),minute=Number(parts.minute),force=q.body?.force===true;
+    const setup=await remoteService.getNetworkSetup();
+    if(!force&&setup.settings?.weekday?.superAutoEnabled!==true)return r.json({ok:true,skipped:true,reason:'SUPER_AUTO_DISABLED',date});
     if(!force&&!['Mon','Tue','Wed','Thu','Fri'].includes(weekday))return r.json({ok:true,skipped:true,reason:'SUPER_OUTSIDE_WEEKDAY',date});
     const cutoff=Number(q.body?.cutoff||(hour>=14?14:10));
     if(![10,14].includes(cutoff))throw new Error('SUPER_CUTOFF_INVALID');

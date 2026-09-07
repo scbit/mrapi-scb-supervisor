@@ -286,3 +286,16 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Botón `Olvidar token de esta PC`.
 - Un token incorrecto se elimina del almacenamiento local y se informa claramente.
 - No modifica Cloud Scheduler, GCP, SUPER SUPERVISOR ni Cierre Diario.
+
+## v0.13.19 — Tres automatizaciones independientes
+- Nuevo panel `Control de automatización`.
+- `Supervisor en Vivo`: ON/OFF independiente, L–V 09:00–17:00, pausa 12–13, frecuencia 45 min.
+- `SUPER SUPERVISOR`: ON/OFF independiente, 10:00 y 14:00.
+- `Cierre Diario Gerencial`: ON/OFF independiente, horario configurable 17:00 / 17:15 / 17:30.
+- Los botones manuales SIEMPRE siguen disponibles aunque un automático esté OFF.
+- El Scheduler existente de 15 min actúa como reloj general.
+- En weekdays el tick antiguo ya no envía sus reportes seller/general por Telegram; sincroniza fuentes y luego ejecuta los tres productos aprobados.
+- Supervisor en Vivo automático reutiliza UNA base Daily V3 global por corte y luego genera el mismo formato aprobado por vendedor, evitando análisis IA repetido por vendedor.
+- SUPER usa idempotencia fecha+10/14; el Scheduler dedicado existente también respeta `superAutoEnabled` y comparte la misma idempotencia.
+- Cierre usa idempotencia por fecha.
+- Existe pausa/reanudación maestra adicional como safety; no afecta los botones manuales.
