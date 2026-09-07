@@ -16,7 +16,8 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:9px;max-h
 <div class="card"><h2>Estado del scheduler</h2><div id="health">Cargando…</div></div>
 
 <div class="card"><h2>Reportes guardados</h2>
-<div class="row"><input id="token" type="password" placeholder="Token del Supervisor" title="Se completa automáticamente con el mismo token guardado en la pantalla principal"><input id="date" type="date"><button onclick="loadAll()">Actualizar</button></div>
+<div id="authNote" class="muted" style="margin-bottom:10px">La pantalla reutiliza automáticamente la sesión autenticada del Supervisor. El token manual queda solo como respaldo.</div>
+<div class="row"><input id="token" type="password" placeholder="Token del Supervisor (solo si hace falta)" title="Respaldo manual si no existe una sesión autenticada"><input id="date" type="date"><button onclick="loadAll()">Actualizar</button></div>
 <table><thead><tr><th>Fecha/hora</th><th>Vendedor / supervisor</th><th>Modo</th><th>Resumen</th><th></th></tr></thead><tbody id="reports"></tbody></table>
 </div>
 
@@ -29,8 +30,14 @@ pre{white-space:pre-wrap;background:#f8fafc;padding:12px;border-radius:9px;max-h
 </div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const headers=()=>({'x-supervisor-token':token.value||localStorage.getItem('supervisor_api_token')||''});
-async function req(url){const r=await fetch(url,{headers:headers()});const d=await r.json();if(!r.ok||d.ok===false)throw new Error(d.error||r.statusText);return d}
+const savedToken=()=>String(token.value||localStorage.getItem('supervisor_api_token')||'').trim();
+const headers=()=>{const t=savedToken();return t?{'x-supervisor-token':t}:{}};
+async function req(url){
+  const r=await fetch(url,{headers:headers(),credentials:'same-origin'});
+  let d={};try{d=await r.json()}catch(_){}
+  if(!r.ok||d.ok===false){const e=new Error(d.error||r.statusText||`HTTP ${r.status}`);e.status=r.status;throw e}
+  return d
+}
 function summary(x){const s=x.summary||{};return Object.entries(s).slice(0,7).map(([k,v])=>`${k}: ${typeof v==='object'?JSON.stringify(v):v}`).join(' · ')}
 async function loadAll(){
   if(token.value)localStorage.setItem('supervisor_api_token',token.value);
@@ -42,5 +49,11 @@ async function loadAll(){
   incidents.innerHTML=(i.incidents||[]).map(x=>`<tr><td>${esc(x.detectedAt||'-')}</td><td><span class="badge critical">${esc(x.type||'-')}</span></td><td>${esc(x.reason||'-')}</td><td>${esc(x.seller||'-')}</td><td><span class="badge open">${esc(x.status||'-')}</span></td><td>${x.hubUrl?`<a target="_blank" href="${esc(x.hubUrl)}">Abrir HUB</a>`:'-'}</td></tr>`).join('')||'<tr><td colspan="6">Sin incidentes críticos.</td></tr>';
 }
 function showReport(raw){detail.textContent=JSON.stringify(JSON.parse(raw),null,2);detailCard.classList.remove('hidden');detailCard.scrollIntoView({behavior:'smooth'})}
-token.value=localStorage.getItem('supervisor_api_token')||'';loadAll().catch(e=>health.textContent='No pude cargar los datos: '+e.message);
+token.value=localStorage.getItem('supervisor_api_token')||'';
+loadAll().then(()=>{authNote.textContent='Sesión autenticada. Reportes e incidentes cargados correctamente.'}).catch(e=>{
+  if(e.status===401||String(e.message).toUpperCase().includes('UNAUTHORIZED')){
+    health.textContent='Falta autenticación de esta pantalla. Volvé al Supervisor y luego regresá a Reportes; si todavía aparece, ingresá el token una sola vez abajo y tocá Actualizar.';
+    authNote.textContent='No es una falla del Scheduler: falta autenticación de la pantalla de Reportes.';
+  }else health.textContent='No pude cargar los datos: '+e.message;
+});
 </script></body></html>

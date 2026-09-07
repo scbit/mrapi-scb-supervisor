@@ -267,3 +267,12 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - No muestra IDs técnicos como nombre de cliente/trato.
 - Si el snapshot local todavía no tiene título, consulta solamente esos top picks contra CRM con `getDeal` (lectura puntual, sin OpenAI) para recuperar el nombre y conversationId.
 - El engine ahora persiste `title` en snapshots CRM para futuras sincronizaciones, reduciendo esas lecturas puntuales.
+
+## v0.13.17 — Reportes: sesión autenticada compartida
+- Corrige `UNAUTHORIZED` en `/reports` sin tocar Cloud Scheduler ni GCP.
+- Una llamada autenticada con `x-supervisor-token` crea una cookie de sesión HttpOnly de 12 horas.
+- La cookie NO contiene el `SUPERVISOR_API_TOKEN`; contiene un HMAC derivado y solo sirve contra la misma aplicación.
+- Las APIs protegidas aceptan el header existente o la cookie de sesión válida.
+- La pantalla principal y `/reports` usan credenciales same-origin.
+- `/reports` reutiliza automáticamente la sesión; el campo de token queda como respaldo manual.
+- Si falta autenticación, la UI ya no lo presenta como caída del Scheduler: muestra explícitamente que falta sesión/token.
