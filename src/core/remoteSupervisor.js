@@ -31,6 +31,7 @@ function normalizeSupervisorConfig(input={},existing={}){
     enabled:input.enabled===undefined?(existing.enabled!==false):!!input.enabled,
     channel:'telegram',
     telegramChatId:String(input.telegramChatId??existing.telegramChatId??'').trim()||null,
+    telegramChatTitle:String(input.telegramChatTitle??existing.telegramChatTitle??'').trim()||null,
     sellers:asList(input.sellers===undefined?existing.sellers:input.sellers),
     timezone:String(input.timezone||existing.timezone||'America/Argentina/Buenos_Aires'),
     weekdays:normalizeDays(input.weekdays===undefined?existing.weekdays:input.weekdays,DEFAULT_WEEKDAYS),
@@ -113,7 +114,7 @@ class RemoteSupervisorService{
       const existing=await this.store.getRemoteSupervisor(id)||{};
       const cfg=normalizeSupervisorConfig({
         ...existing,id,mode:'SELLER_GROUP',name:String(row.sellerLabel||sellerId),sellers:[sellerId],
-        telegramChatId:String(row.telegramChatId||'').trim()||null,enabled:row.enabled!==false,
+        telegramChatId:String(row.telegramChatId||'').trim()||null,telegramChatTitle:String(row.telegramChatTitle||existing.telegramChatTitle||'').trim()||null,enabled:row.enabled!==false,
         weekdays:settings.weekday.days,startTime:settings.weekday.startTime,endTime:settings.weekday.endTime,
         pauses:[{start:settings.weekday.pauseStart,end:settings.weekday.pauseEnd}],frequencyMinutes:settings.weekday.sellerFrequencyMinutes
       },existing);

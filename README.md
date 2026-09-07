@@ -213,3 +213,9 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Mantiene L–V 09:00–17:00 y pausa 12:00–13:00.
 - NO incorpora comparación entre cortes; se hará en una misión posterior.
 - La automatización real requiere que Cloud Scheduler invoque `/api/supervisor/remote/tick`; el endpoint ya aplica gating de 45 minutos.
+
+## v0.13.12 — Nombres reales de grupos Telegram
+- El selector y la tabla muestran el nombre real del grupo de Telegram.
+- Los Chat IDs quedan internos.
+- Para grupos configurados que ya no aparecen en `getUpdates`, usa Telegram `getChat(chat_id)` para recuperar el título.
+- Persiste `telegramChatTitle` junto al destino.
