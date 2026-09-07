@@ -138,9 +138,13 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
   }
   async function runProductAutomation({now,send=true}){
     const setup=await remoteService.getNetworkSetup();
-    const live=await runApprovedLiveAuto({now,send,setup});
-    const superResult=await runApprovedSuperAuto({now,send,setup});
-    const close=await runApprovedCloseAuto({now,send,setup});
+    const safe=async(name,fn)=>{try{return await fn()}catch(e){
+      await engine.store.saveCriticalIncident(`auto_product__${name}__${now.toISOString().slice(0,16)}`,{type:'AUTO_PRODUCT_FAILURE',category:'SYSTEM',severity:'CRITICAL',status:'OPEN',product:name,reason:String(e.message||e),detectedAt:new Date().toISOString()}).catch(()=>{});
+      return{product:name,skipped:true,error:String(e.message||e),reason:'PRODUCT_FAILED'}
+    }};
+    const live=await safe('live',()=>runApprovedLiveAuto({now,send,setup}));
+    const superResult=await safe('super',()=>runApprovedSuperAuto({now,send,setup}));
+    const close=await safe('close',()=>runApprovedCloseAuto({now,send,setup}));
     return{live,super:superResult,close}
   }
 
@@ -151,8 +155,8 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
     const deliveryMode=String(setup.settings?.liveDaily?.deliveryMode||'DRY_RUN').toUpperCase();
     const automaticSend=requestedSend&&deliveryMode==='LIVE';
     const p=localAutomationParts(now),isWeekend=['Sat','Sun'].includes(p.weekday);
-    const core=await remoteService.automationTick({engine,now,send:isWeekend?automaticSend:false,force:q.body?.force===true,source});
-    const products=(!core?.skipped||core?.reason==='SAFETY_LIMIT_REACHED'?await runProductAutomation({now,send:automaticSend}):{skipped:true,reason:core?.reason||'CORE_TICK_SKIPPED'});
+    const core=await remoteService.automationTick({engine,now,send:isWeekend?automaticSend:false,force:q.body?.force===true,source,runLegacy:isWeekend});
+    const products=(!core?.skipped?await runProductAutomation({now,send:automaticSend}):{skipped:true,reason:core?.reason||'CORE_TICK_SKIPPED'});
     r.json({ok:true,...core,deliveryMode,automaticSend,productAutomation:products});
   }catch(e){r.status(500).json({ok:false,error:e.message,health:remoteService?await remoteService.getAutomationHealth().catch(()=>null):null})}});
   app.get('/api/supervisor/automation/health',auth,async(_q,r)=>{try{if(!remoteService)throw new Error('REMOTE_SUPERVISOR_NOT_AVAILABLE');r.json({ok:true,health:await remoteService.getAutomationHealth()})}catch(e){r.status(500).json({ok:false,error:e.message})}});

@@ -11,7 +11,7 @@
   </div>
   <div id="authStatus" class="authStatus">Esperando autenticación.</div>
 </div>
-<div class="statusbar"><div class="stat"><div class="k">Supervisor</div><div class="v" id="stHealth">—</div></div><div class="stat"><div class="k">Scheduler</div><div class="v" id="stScheduler">NO CONECTADO</div></div><div class="stat"><div class="k">Modo Telegram</div><div class="v" id="stMode">DRY_RUN</div></div><div class="stat"><div class="k">Versión</div><div class="v">v0.13.22</div></div></div>
+<div class="statusbar"><div class="stat"><div class="k">Supervisor</div><div class="v" id="stHealth">—</div></div><div class="stat"><div class="k">Scheduler</div><div class="v" id="stScheduler">NO CONECTADO</div></div><div class="stat"><div class="k">Modo Telegram</div><div class="v" id="stMode">DRY_RUN</div></div><div class="stat"><div class="k">Versión</div><div class="v">v0.13.23</div></div></div>
 <section class="card span12" style="margin-bottom:16px">
 <h2>Control de automatización</h2>
 <div class="sub">Cada producto se activa o desactiva por separado. Los botones manuales siguen funcionando aunque su automático esté apagado.</div>
@@ -229,7 +229,7 @@ async function refreshHealth(){try{
   stHealth.textContent=h.status||'—';stScheduler.textContent=h.scheduler?.status||'NOT_CONNECTED';stMode.textContent=h.deliveryMode||'—';
   const warnings=Array.isArray(h.lastWarnings)?h.lastWarnings:[];
   if(h.paused)autoControlStatus.textContent=`⚠️ Motor pausado · motivo: ${h.pauseReason||h.lastError||'sin detalle'}`;
-  else if(warnings.length)autoControlStatus.textContent=`Motor activo · backlog detectado: ${warnings.join(', ')} · continuará en el próximo tick.`;
+  else if(warnings.length)autoControlStatus.textContent=`Motor activo · backlog detectado: ${warnings.join(', ')} · continuará en el próximo tick (procesamiento acotado).`;
   techOut.textContent=JSON.stringify(h,null,2)
 }catch(e){stHealth.textContent='ERROR';techOut.textContent=e.message}}
 function selLabel(){return seller.options[seller.selectedIndex]?.textContent||seller.value}

@@ -320,3 +320,13 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Solo un timeout real sigue siendo un safety stop que auto-pausa.
 - La UI muestra claramente `pauseReason` o warnings de backlog.
 - No cambia los 3 switches, Telegram LIVE, horarios ni los botones manuales.
+
+## v0.13.23 — BOUNDED TICK
+- Corrige el 504 observado en Cloud Run con latencia exacta de 300 segundos.
+- El Scheduler de 15 minutos usa lotes acotados: 25 conversaciones, 300 deals y 750 eventos Hunter por tick.
+- Los checkpoints conservan el avance; si queda backlog continúa en el siguiente tick.
+- Las ejecuciones manuales/full mantienen los límites anteriores.
+- En weekdays se elimina del tick automático la reconstrucción redundante del pipeline remoto legacy de seller/general reports.
+- El flujo automático queda: sync incremental acotada -> evaluar los 3 productos aprobados.
+- Un fallo aislado de Live / SUPER / Cierre se registra como incidente y no convierte automáticamente todo el tick en HTTP 500.
+- Weekend conserva su flujo existente.

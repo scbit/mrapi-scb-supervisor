@@ -92,7 +92,7 @@ class RemoteSupervisorService{
   }
 
   defaultNetworkSettings(){
-    return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:true,deliveryMode:'DRY_RUN',safety:{maxConversationsPerTick:250,maxDealsPerTick:2000,maxHunterEventsPerTick:5000,maxTelegramPerTick:25,maxTickSeconds:180,maxConsecutiveFailures:3,lockMinutes:15}},
+    return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:true,deliveryMode:'DRY_RUN',safety:{maxConversationsPerTick:250,maxDealsPerTick:2000,maxHunterEventsPerTick:5000,schedulerConversationsPerTick:25,schedulerDealsPerTick:300,schedulerHunterEventsPerTick:750,maxTelegramPerTick:25,maxTickSeconds:180,maxConsecutiveFailures:3,lockMinutes:15}},
       weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:45,liveAutoEnabled:false,superAutoEnabled:false,closingAutoEnabled:false,closingAutoTime:'17:00',generalFrequencyMinutes:60,generalChatId:null,superSupervisorChatId:null,superSupervisorChatTitle:null,closingChatId:null,closingChatTitle:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
       weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
     };
@@ -390,7 +390,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     await this.store.saveRemoteCheckpoint('automation_health',{autoPaused:false,pauseReason:null,consecutiveFailures:0,lastError:null});
     return this.getAutomationHealth();
   }
-  async automationTick({engine,now=new Date(),send=true,force=false,source='manual'}={}){
+  async automationTick({engine,now=new Date(),send=true,force=false,source='manual',runLegacy=true}={}){
     if(!engine)throw new Error('SUPERVISOR_ENGINE_REQUIRED');
     if(source==='scheduler')await this.store.saveRemoteCheckpoint('scheduler_heartbeat',{at:now.toISOString(),mode:'tick'});
     const setup=await this.getNetworkSetup(),safety=setup.settings.liveDaily?.safety||{},control=await this.store.getRemoteCheckpoint('automation_control')||{},prior=await this.store.getRemoteCheckpoint('automation_health')||{};
@@ -403,14 +403,18 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     const started=Date.now();
     await this.store.saveRemoteCheckpoint('automation_health',{running:true,lastTickAt:now.toISOString(),lastError:null});
     try{
-      const core=await engine.run({now});
-      const elapsedCore=Date.now()-started;
-      const limits={
+      const engineLimits=source==='scheduler'?{
+        conversations:Number(safety.schedulerConversationsPerTick||25),
+        deals:Number(safety.schedulerDealsPerTick||300),
+        hunter:Number(safety.schedulerHunterEventsPerTick||750)
+      }:{
         conversations:Number(safety.maxConversationsPerTick||250),
         deals:Number(safety.maxDealsPerTick||2000),
-        hunter:Number(safety.maxHunterEventsPerTick||5000),
-        seconds:Number(safety.maxTickSeconds||180)
+        hunter:Number(safety.maxHunterEventsPerTick||5000)
       };
+      const core=await engine.run({now,limits:engineLimits});
+      const elapsedCore=Date.now()-started;
+      const limits={...engineLimits,seconds:Number(safety.maxTickSeconds||180)};
       const hitConversationCap=Number(core.processedConversations||0)>=limits.conversations;
       const hitDealCap=core.crmMode==='incremental'&&Number(core.processedDeals||0)>=limits.deals;
       const hitHunterCap=Number(core.processedHunterEvents||0)>=limits.hunter;
@@ -442,7 +446,9 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
         return{skipped:true,reason:'SAFETY_LIMIT_REACHED',reasons,backlogWarnings,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},health:await this.getAutomationHealth()};
       }
 
-      const result=await this.tick({now,send});
+      // Weekday scheduler path already has the approved v0.13.x products in app.js.
+      // Avoid rebuilding the obsolete remote seller/general report pipeline in the same HTTP request.
+      const result=runLegacy?await this.tick({now,send}):{at:now.toISOString(),mode:'sync_only',results:[]};
       const resultRows=Array.isArray(result.results)?result.results:[];
       const actualTelegramSends=resultRows.filter(x=>x?.sent===true||x?.telegramSent===true||x?.delivery?.telegram===true).length;
       const maxTelegram=Number(safety.maxTelegramPerTick||25);

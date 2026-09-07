@@ -26,8 +26,8 @@ test('0.11.0 remote tick refreshes core incrementally before live supervision',(
   const http=fs.readFileSync('src/http/app.js','utf8');
   const remote=fs.readFileSync('src/core/remoteSupervisor.js','utf8');
   assert.ok(http.includes("remoteService.automationTick({engine,now"));
-  assert.ok(remote.includes("const core=await engine.run({now});"));
-  assert.ok(remote.includes("const result=await this.tick({now,send});"));
+  assert.ok(remote.includes("engine.run({now,limits:engineLimits})"));
+  assert.ok(remote.includes("runLegacy?await this.tick({now,send})"));
 });
 
 test('0.11.0 general summary reads persisted live reports, not AI',()=>{

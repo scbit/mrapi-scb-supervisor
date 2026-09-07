@@ -17,7 +17,7 @@ test('0.11.8 Telegram budget uses actual sends after tick',()=>{
 
 test('0.11.8 DRY_RUN cannot hit Telegram budget before processing',()=>{
   const s=fs.readFileSync('src/core/remoteSupervisor.js','utf8');
-  const tickPos=s.indexOf('const result=await this.tick({now,send});');
+  const tickPos=s.indexOf("runLegacy?await this.tick({now,send})");
   const budgetPos=s.indexOf('Actual Telegram sends ${actualTelegramSends} exceeded max ${maxTelegram}');
   assert.ok(tickPos>=0 && budgetPos>tickPos);
 });
