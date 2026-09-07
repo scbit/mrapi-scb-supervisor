@@ -299,3 +299,9 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - SUPER usa idempotencia fecha+10/14; el Scheduler dedicado existente también respeta `superAutoEnabled` y comparte la misma idempotencia.
 - Cierre usa idempotencia por fecha.
 - Existe pausa/reanudación maestra adicional como safety; no afecta los botones manuales.
+
+## v0.13.20 — Fix switches de automatización
+- Corrige el checkbox que se destildaba inmediatamente al hacer click.
+- La causa era que el evento `change` volvía a renderizar desde la configuración guardada (todavía OFF).
+- Ahora el click solo actualiza el estado visual local.
+- `Guardar automatización` persiste los tres valores y luego refresca desde backend.
