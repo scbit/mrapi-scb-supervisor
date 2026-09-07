@@ -276,3 +276,13 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - La pantalla principal y `/reports` usan credenciales same-origin.
 - `/reports` reutiliza automáticamente la sesión; el campo de token queda como respaldo manual.
 - Si falta autenticación, la UI ya no lo presenta como caída del Scheduler: muestra explícitamente que falta sesión/token.
+
+## v0.13.18 — Conectar Supervisor desde cualquier PC
+- Agrega un bloque visible `🔐 Conectar Supervisor` en la pantalla principal.
+- Si la PC no tiene token/sesión o una API devuelve 401, la UI muestra automáticamente el bloque de autenticación.
+- Campo de token + botón `Guardar y conectar`.
+- El token se valida contra `/api/supervisor/automation/health` antes de dar la PC por conectada.
+- Si es válido, se guarda en `localStorage` de ese navegador y se crea/reutiliza la sesión HttpOnly de v0.13.17.
+- Botón `Olvidar token de esta PC`.
+- Un token incorrecto se elimina del almacenamiento local y se informa claramente.
+- No modifica Cloud Scheduler, GCP, SUPER SUPERVISOR ni Cierre Diario.
