@@ -107,6 +107,24 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
   async function closingChatId(){const setup=await remoteService.getNetworkSetup();return setup.settings?.weekday?.closingChatId||null}
   app.post('/api/supervisor/manual/live',auth,async(q,r)=>{try{const report=await manualSupervisionService.liveSeller({date:q.body?.date,cutoff:Number(q.body?.cutoff||17),sellerKey:q.body?.sellerKey,sellerLabel:q.body?.sellerLabel,forceAi:q.body?.forceAi===true});let sent=null;if(q.body?.send===true){const chatId=await sellerChatId(q.body?.sellerKey);if(!chatId)throw new Error('SELLER_TELEGRAM_NOT_CONFIGURED');sent=await telegram.send(report.text,chatId)}r.json({ok:true,report,sent})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/manual/super',auth,async(q,r)=>{try{const report=await manualSupervisionService.superSupervisor({date:q.body?.date,cutoff:Number(q.body?.cutoff||10),forceAi:q.body?.forceAi===true});let sent=null;if(q.body?.send===true){const chatId=await superSupervisorChatId();if(!chatId)throw new Error('SUPER_SUPERVISOR_TELEGRAM_NOT_CONFIGURED');sent=await telegram.send(report.text,chatId)}r.json({ok:true,report,sent})}catch(e){r.status(500).json({ok:false,error:e.message})}});
+  app.post('/api/supervisor/scheduled/super',auth,async(q,r)=>{try{
+    const now=q.body?.now?new Date(q.body.now):new Date();
+    const tz='America/Argentina/Buenos_Aires';
+    const parts=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).filter(x=>x.type!=='literal').map(x=>[x.type,x.value]));
+    const date=`${parts.year}-${parts.month}-${parts.day}`,weekday=parts.weekday,hour=Number(parts.hour),minute=Number(parts.minute),force=q.body?.force===true;
+    if(!force&&!['Mon','Tue','Wed','Thu','Fri'].includes(weekday))return r.json({ok:true,skipped:true,reason:'SUPER_OUTSIDE_WEEKDAY',date});
+    const cutoff=Number(q.body?.cutoff||(hour>=14?14:10));
+    if(![10,14].includes(cutoff))throw new Error('SUPER_CUTOFF_INVALID');
+    if(!force){const target=cutoff*60,cur=hour*60+minute;if(cur<target||cur>=target+30)return r.json({ok:true,skipped:true,reason:'SUPER_OUTSIDE_WINDOW',date,cutoff});}
+    const cpKey=`scheduled_super_sent__${date}__${cutoff}`;
+    const already=await engine.store.getRemoteCheckpoint(cpKey);
+    if(already?.sentAt&&!force)return r.json({ok:true,skipped:true,reason:'SUPER_ALREADY_SENT',date,cutoff,sentAt:already.sentAt});
+    const chatId=await superSupervisorChatId();if(!chatId)throw new Error('SUPER_SUPERVISOR_TELEGRAM_NOT_CONFIGURED');
+    const report=await manualSupervisionService.superSupervisor({date,cutoff,forceAi:false});
+    const sent=await telegram.send(report.text,chatId);
+    await engine.store.saveRemoteCheckpoint(cpKey,{sentAt:new Date().toISOString(),reportId:report.id,chatId,source:q.body?.source==='scheduler'?'scheduler':'manual'});
+    r.json({ok:true,skipped:false,date,cutoff,reportId:report.id,sent});
+  }catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/manual/close',auth,async(q,r)=>{try{const report=await manualSupervisionService.closing({date:q.body?.date,forceAi:q.body?.forceAi===true});let sent=null;if(q.body?.send===true){const chatId=await closingChatId();if(!chatId)throw new Error('CLOSING_TELEGRAM_NOT_CONFIGURED');sent=await telegram.send(report.text,chatId)}r.json({ok:true,report,sent})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/daily-v3-live/generate',auth,async(q,r)=>{try{if(!dailyV3LiveService)throw new Error('DAILY_V3_LIVE_NOT_AVAILABLE');const report=await dailyV3LiveService.generateSeller({date:String(q.body?.date||''),sellerKey:String(q.body?.sellerKey||''),sellerLabel:q.body?.sellerLabel||null,force:q.body?.force===true});r.json({ok:true,report})}catch(e){r.status(500).json({ok:false,error:e.message})}});
   app.post('/api/supervisor/daily-v3-live/compare',auth,async(q,r)=>{try{if(!dailyV3LiveService)throw new Error('DAILY_V3_LIVE_NOT_AVAILABLE');const report=await dailyV3LiveService.compare({dateA:String(q.body?.dateA||''),dateB:String(q.body?.dateB||''),sellerKey:String(q.body?.sellerKey||''),sellerLabel:q.body?.sellerLabel||null,force:q.body?.force===true});r.json({ok:true,report})}catch(e){r.status(500).json({ok:false,error:e.message})}});

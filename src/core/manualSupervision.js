@@ -83,7 +83,106 @@ function liveText({date,cutoff,label,rows,trend='BASELINE',correctionStatuses={}
 }
 function trendFrom(prev,current){if(!prev)return'BASELINE';const a=prev.metrics||{},b=current;const delta=(Number(b.goodPct||0)-Number(a.goodPct||0))-(Number(b.correctionPct||0)-Number(a.correctionPct||0));return delta>=10?'MEJORANDO':delta<=-10?'EMPEORANDO':'ESTABLE'}
 function superText({date,cutoff,rows}){const cases=rows.filter(x=>x.inboundCount>0).map(rowCase),opps=cases.filter(x=>x.opportunity),bad=cases.filter(x=>['GRAVE','HIPER_GRAVE'].includes(x.severity));const L=[`🚨 SUPER SUPERVISOR — ${cutoff}:00`,`Fecha ${date}`,'',`Oportunidades con producto definido: ${opps.length}`,`Fallos graves: ${bad.filter(x=>x.severity==='GRAVE').length}`,`Fallos HIPER GRAVES: ${bad.filter(x=>x.severity==='HIPER_GRAVE').length}`,'','🔥 OPORTUNIDADES QUE NO SE PUEDEN PERDER'];if(!opps.length)L.push('Sin oportunidades concretas detectadas.');opps.slice(0,30).forEach((c,i)=>L.push('',`${i+1}. ${c.contactName} — ${c.seller}`,`Producto: ${c.product.name||'Producto identificado'}`,`Perfil: ${c.profile}`,`Gestión: ${c.needsCorrection?'REQUIERE ACCIÓN':'BIEN TRABAJADA'}`,c.needsCorrection?`Falla: ${c.reason}`:'Sin falla grave detectada.',`HUB: ${c.hubUrl}`));L.push('','🚨 FALLOS GRAVES / HIPER GRAVES');if(!bad.length)L.push('Sin fallos graves detectados.');bad.slice(0,30).forEach((c,i)=>L.push('',`${i+1}. ${c.severity} — ${c.contactName} — ${c.seller}`,`Producto: ${c.product.defined?c.product.name||'identificado':'no identificado'}`,`Perfil: ${c.profile}`,`Qué pasó: ${c.reason}`,`Qué debería hacer: ${c.expected}`,`HUB: ${c.hubUrl}`));return L.join('\n')}
-function closeText({date,base,rows,dealStates=[]}){const cases=rows.filter(x=>x.inboundCount>0).map(rowCase),opps=cases.filter(x=>x.opportunity);const bySeller=new Map();for(const c of cases){const k=c.seller||'No detectado',x=bySeller.get(k)||{seller:k,clients:0,opps:0,toCorrect:0,grave:0};x.clients++;if(c.opportunity)x.opps++;if(c.needsCorrection)x.toCorrect++;if(['GRAVE','HIPER_GRAVE'].includes(c.severity))x.grave++;bySeller.set(k,x)}const active=dealStates.filter(d=>d.portfolio?.active===true),overdue=active.filter(d=>d.portfolio?.overdue===true),red=overdue.filter(d=>{const due=d.portfolio?.dueDate||d.snapshot?.dueDate;return due&&daysOverdue(due,new Date(`${date}T23:59:59-03:00`))>=7});const L=[`📊 CIERRE DIARIO GERENCIAL — ${date}`,'09:00–17:00','',`Clientes del día: ${cases.length}`,`Oportunidades con producto definido: ${opps.length}`,`Casos a corregir: ${cases.filter(x=>x.needsCorrection).length}`,`Fallos graves/hiper graves: ${cases.filter(x=>['GRAVE','HIPER_GRAVE'].includes(x.severity)).length}`,'','🔴 VENCIDOS — PRIORIDAD GERENCIAL',`Tratos activos: ${active.length}`,`Vencidos: ${overdue.length}`,`Con +7 días: ${red.length}`,'','🔥 OPORTUNIDADES DEL DÍA'];if(!opps.length)L.push('Sin oportunidades concretas detectadas.');opps.slice(0,40).forEach((c,i)=>L.push('',`${i+1}. ${c.contactName} — ${c.seller}`,`Producto: ${c.product.name||'Producto identificado'}`,`Perfil: ${c.profile}`,`Desarrollo: ${c.needsCorrection?'A DESARROLLAR':'BIEN DESARROLLADA'}`,c.needsCorrection?`Qué falta: ${c.expected}`:'',`HUB: ${c.hubUrl}`));L.push('','📋 RESUMEN POR VENDEDOR');[...bySeller.values()].sort((a,b)=>b.toCorrect-a.toCorrect).forEach(x=>L.push(`• ${x.seller}: clientes ${x.clients} · oportunidades ${x.opps} · a corregir ${x.toCorrect} · graves ${x.grave}`));return L.join('\n')}
+
+const CLOSE_CRM_STAGES=['SEGUIMIENTO','MARCA PERSONAL','ESPERANDO PI','PARA COTIZAR','COTIZADO PARA ENVIAR','HORNO'];
+function dateOnly(v){
+  const x=String(v||'').trim();
+  const m=x.match(/^(\d{4}-\d{2}-\d{2})/);
+  return m?m[1]:'';
+}
+function addIsoDays(ymd,days){
+  const d=new Date(`${ymd}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+Number(days||0));
+  return d.toISOString().slice(0,10);
+}
+function dealStageNorm(d){return String(d?.snapshot?.stageNorm||d?.snapshot?.stage||d?.stageNorm||d?.stage||'').trim().toUpperCase().replace(/\s+/g,' ')}
+function dealOwner(d){return String(d?.snapshot?.owner||d?.owner||'No detectado').trim()||'No detectado'}
+function dealTitle(d){return String(d?.snapshot?.title||d?.title||d?.snapshot?.contactName||d?.contactName||d?.id||'Trato').trim()}
+function dealConversationId(d){return String(d?.snapshot?.conversationId||d?.conversationId||'').trim()}
+function dealDue(d){return dateOnly(d?.snapshot?.dueDate||d?.portfolio?.dueDate||d?.dueDate)}
+function closeCrmPortfolio(dealStates,date){
+  const cutoff15=addIsoDays(date,-15),to15=addIsoDays(date,15),to7=addIsoDays(date,7);
+  const rows=(dealStates||[]).filter(d=>{
+    const stage=dealStageNorm(d),due=dealDue(d);
+    return CLOSE_CRM_STAGES.includes(stage)&&due;
+  });
+  const bySeller=new Map();
+  const ensure=seller=>{
+    const k=seller||'No detectado';
+    if(!bySeller.has(k))bySeller.set(k,{seller:k,overdue15:0,overdueRecent:0,vigent15:0,dueToday:0,due7:0,due8to15:0,stagesOverdue15:{},stagesVigent15:{},vigentDeals:[]});
+    return bySeller.get(k);
+  };
+  for(const d of rows){
+    const seller=dealOwner(d),x=ensure(seller),stage=dealStageNorm(d),due=dealDue(d);
+    if(due<cutoff15){
+      x.overdue15++;x.stagesOverdue15[stage]=(x.stagesOverdue15[stage]||0)+1;
+    }else if(due<date){
+      x.overdueRecent++;
+    }else if(due<=to15){
+      x.vigent15++;x.stagesVigent15[stage]=(x.stagesVigent15[stage]||0)+1;
+      if(due===date)x.dueToday++;
+      else if(due<=to7)x.due7++;
+      else x.due8to15++;
+      x.vigentDeals.push({id:d.id,title:dealTitle(d),stage,dueDate:due,conversationId:dealConversationId(d)});
+    }
+  }
+  for(const x of bySeller.values())x.vigentDeals.sort((a,b)=>a.dueDate.localeCompare(b.dueDate)||a.title.localeCompare(b.title,'es',{sensitivity:'base'}));
+  const sellers=[...bySeller.values()].sort((a,b)=>b.overdue15-a.overdue15||b.vigent15-a.vigent15||a.seller.localeCompare(b.seller,'es',{sensitivity:'base'}));
+  return{
+    cutoff15,to15,
+    totalOverdue15:sellers.reduce((a,x)=>a+x.overdue15,0),
+    totalOverdueRecent:sellers.reduce((a,x)=>a+x.overdueRecent,0),
+    totalVigent15:sellers.reduce((a,x)=>a+x.vigent15,0),
+    sellers
+  };
+}
+function shortStageBreakdown(obj){
+  return Object.entries(obj||{}).filter(([,n])=>Number(n)>0).map(([k,n])=>`${k.replaceAll('_',' ')} ${n}`).join(' · ')||'sin casos';
+}
+function closeText({date,base,rows,dealStates=[]}){
+  const cases=rows.filter(x=>x.inboundCount>0).map(rowCase),opps=cases.filter(x=>x.opportunity);
+  const bySeller=new Map();
+  for(const c of cases){
+    const k=c.seller||'No detectado',x=bySeller.get(k)||{seller:k,clients:0,opps:0,toCorrect:0,grave:0};
+    x.clients++;if(c.opportunity)x.opps++;if(c.needsCorrection)x.toCorrect++;if(['GRAVE','HIPER_GRAVE'].includes(c.severity))x.grave++;bySeller.set(k,x)
+  }
+  const crm=closeCrmPortfolio(dealStates,date);
+  const L=[`📊 CIERRE DIARIO GERENCIAL — ${date}`,'09:00–17:00','',
+    `Clientes del día: ${cases.length}`,
+    `Oportunidades con producto definido: ${opps.length}`,
+    `Casos a corregir: ${cases.filter(x=>x.needsCorrection).length}`,
+    `Fallos graves/hiper graves: ${cases.filter(x=>['GRAVE','HIPER_GRAVE'].includes(x.severity)).length}`,
+    '',
+    '📌 CARTERA CRM — CÁLCULO DETERMINÍSTICO, SIN IA',
+    `Vencidos +15 días: ${crm.totalOverdue15}`,
+    `Vencidos recientes 1–15 días: ${crm.totalOverdueRecent}`,
+    `Vigentes con vencimiento entre hoy y +15 días: ${crm.totalVigent15}`,
+    '',
+    '🔴 VENCIDOS +15 DÍAS — POR VENDEDOR'
+  ];
+  const overdueSellers=crm.sellers.filter(x=>x.overdue15>0);
+  if(!overdueSellers.length)L.push('Sin vencidos de más de 15 días en etapas comerciales controladas.');
+  overdueSellers.forEach(x=>L.push(`• ${x.seller}: ${x.overdue15} · ${shortStageBreakdown(x.stagesOverdue15)}`));
+
+  L.push('','🟢 VIGENTES 0–15 DÍAS — PARA EMPUJAR CIERRE');
+  const vigentSellers=crm.sellers.filter(x=>x.vigent15>0).sort((a,b)=>b.vigent15-a.vigent15||a.seller.localeCompare(b.seller,'es',{sensitivity:'base'}));
+  if(!vigentSellers.length)L.push('Sin tratos vigentes con vencimiento dentro de los próximos 15 días.');
+  vigentSellers.forEach(x=>{
+    L.push('',`• ${x.seller}: ${x.vigent15} vigentes · hoy ${x.dueToday} · próximos 7 días ${x.due7} · días 8–15 ${x.due8to15}`,
+      `  Etapas: ${shortStageBreakdown(x.stagesVigent15)}`);
+    x.vigentDeals.slice(0,3).forEach(d=>{
+      L.push(`  → ${d.dueDate} · ${d.stage.replaceAll('_',' ')} · ${d.title}${d.conversationId?` · HUB: ${hubUrl(d.conversationId)}`:''}`);
+    });
+    if(x.vigentDeals.length>3)L.push(`  → +${x.vigentDeals.length-3} trato(s) más dentro de la ventana 0–15 días`);
+  });
+
+  L.push('','🔥 OPORTUNIDADES DEL DÍA');
+  if(!opps.length)L.push('Sin oportunidades concretas detectadas.');
+  opps.slice(0,40).forEach((c,i)=>L.push('',`${i+1}. ${c.contactName} — ${c.seller}`,`Producto: ${c.product.name||'Producto identificado'}`,`Perfil: ${c.profile}`,`Desarrollo: ${c.needsCorrection?'A DESARROLLAR':'BIEN DESARROLLADA'}`,c.needsCorrection?`Qué falta: ${c.expected}`:'',`HUB: ${c.hubUrl}`));
+  L.push('','📋 RESUMEN POR VENDEDOR');
+  [...bySeller.values()].sort((a,b)=>b.toCorrect-a.toCorrect).forEach(x=>L.push(`• ${x.seller}: clientes ${x.clients} · oportunidades ${x.opps} · a corregir ${x.toCorrect} · graves ${x.grave}`));
+  return L.join('\n')
+}
+
 
 function manualReportKey(date,cutoff=17,sellerKey=null){const seller=sellerKey?`__seller_${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`:'';return `${date}__cutoff_${Number(cutoff)}__guide_v1_product_context_v1${seller}`}
 class ManualSupervisionService{
@@ -100,4 +199,4 @@ class ManualSupervisionService{
   async superSupervisor({date,cutoff=10,forceAi=true}){const base=await this.base(date,cutoff,forceAi),rows=base.rows||[];const report={id:`super_supervisor__${date}__${cutoff}`,reportType:'super_supervisor',date,cutoff:Number(cutoff),generatedAt:new Date().toISOString(),metrics:metrics(rows),text:superText({date,cutoff,rows})};await this.store.saveLiveDailyReport(report.id,report);return report}
   async closing({date,forceAi=true}){const base=await this.base(date,17,forceAi),dealStates=await this.store.listAllDeals(20000),rows=base.rows||[];const report={id:`gerencial_close__${date}`,reportType:'gerencial_close',date,cutoff:17,generatedAt:new Date().toISOString(),metrics:metrics(rows),text:closeText({date,base,rows,dealStates})};await this.store.saveLiveDailyReport(report.id,report);return report}
 }
-module.exports={ManualSupervisionService,manualReportKey,rowCase,metrics,needsCorrection,severity,product,profile,checklist,liveText,superText,closeText};
+module.exports={ManualSupervisionService,manualReportKey,rowCase,metrics,needsCorrection,severity,product,profile,checklist,liveText,superText,closeText,closeCrmPortfolio};

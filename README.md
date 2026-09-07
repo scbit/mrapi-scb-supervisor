@@ -229,3 +229,24 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Cierre Diario Gerencial tiene su propio grupo Telegram (`closingChatId`).
 - Los botones manuales de SUPER y Cierre envían únicamente a sus destinos específicos.
 - Se conservan nombres visibles de grupos y Chat IDs internos.
+
+## v0.13.14 — SUPER SUPERVISOR automático 10:00 y 14:00
+- Nuevo endpoint `POST /api/supervisor/scheduled/super`.
+- Usa horario local `America/Argentina/Buenos_Aires`, solo L–V.
+- Ventanas válidas 10:00–10:29 y 14:00–14:29.
+- Cutoff automático 10 o 14.
+- Envía al grupo específico de SUPER SUPERVISOR.
+- Idempotencia por fecha + cutoff: un mismo reporte no se manda dos veces.
+- Reutiliza análisis/cache existente y no fuerza IA de nuevo.
+- Pensado para un Cloud Scheduler dedicado a las 10:00 y 14:00.
+
+## v0.13.15 — Cierre Diario optimizado: CRM sin IA
+- NO modifica SUPER SUPERVISOR.
+- Mantiene intactos `🔥 OPORTUNIDADES DEL DÍA` y `📋 RESUMEN POR VENDEDOR`.
+- El análisis comercial con IA queda limitado a las conversaciones del día.
+- La cartera CRM NO usa IA: se calcula determinísticamente desde los deal states ya sincronizados en Supervisor.
+- Etapas CRM controladas: Seguimiento, Marca personal, Esperando PI, Para cotizar, Cotizado para enviar y Horno.
+- Nuevo bloque por vendedor: vencidos de más de 15 días.
+- Nuevo bloque por vendedor: vigentes con dueDate entre hoy y +15 días.
+- Para vigentes muestra hoy / próximos 7 / días 8–15, desglose por etapa y hasta 3 tratos concretos para empujar cierre.
+- Los miles de tratos históricos NO disparan análisis OpenAI.
