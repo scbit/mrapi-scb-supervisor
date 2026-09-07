@@ -322,11 +322,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - No cambia los 3 switches, Telegram LIVE, horarios ni los botones manuales.
 
 ## v0.13.23 — BOUNDED TICK
-- Corrige el 504 observado en Cloud Run con latencia exacta de 300 segundos.
+- Corrige el 504 observado con latencia exacta de 300 segundos en `/api/supervisor/remote/tick`.
 - El Scheduler de 15 minutos usa lotes acotados: 25 conversaciones, 300 deals y 750 eventos Hunter por tick.
-- Los checkpoints conservan el avance; si queda backlog continúa en el siguiente tick.
-- Las ejecuciones manuales/full mantienen los límites anteriores.
-- En weekdays se elimina del tick automático la reconstrucción redundante del pipeline remoto legacy de seller/general reports.
-- El flujo automático queda: sync incremental acotada -> evaluar los 3 productos aprobados.
-- Un fallo aislado de Live / SUPER / Cierre se registra como incidente y no convierte automáticamente todo el tick en HTTP 500.
+- Los checkpoints conservan el avance y el backlog continúa en ticks posteriores.
+- Las ejecuciones manuales/full mantienen sus límites anteriores.
+- En weekdays se evita reconstruir el pipeline remoto legacy seller/general dentro del mismo tick.
+- El flujo queda: sync incremental acotada -> evaluar los 3 productos aprobados.
+- Los fallos aislados de Live / SUPER / Cierre quedan persistidos como incidentes y no convierten por sí solos todo el tick en HTTP 500.
 - Weekend conserva su flujo existente.

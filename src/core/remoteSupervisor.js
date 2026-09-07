@@ -446,8 +446,6 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
         return{skipped:true,reason:'SAFETY_LIMIT_REACHED',reasons,backlogWarnings,core:{processedConversations:core.processedConversations,processedDeals:core.processedDeals,processedHunterEvents:core.processedHunterEvents,crmMode:core.crmMode},health:await this.getAutomationHealth()};
       }
 
-      // Weekday scheduler path already has the approved v0.13.x products in app.js.
-      // Avoid rebuilding the obsolete remote seller/general report pipeline in the same HTTP request.
       const result=runLegacy?await this.tick({now,send}):{at:now.toISOString(),mode:'sync_only',results:[]};
       const resultRows=Array.isArray(result.results)?result.results:[];
       const actualTelegramSends=resultRows.filter(x=>x?.sent===true||x?.telegramSent===true||x?.delivery?.telegram===true).length;

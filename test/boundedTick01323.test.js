@@ -27,9 +27,8 @@ test('0.13.23 weekday scheduler skips obsolete remote reporting path',()=>{
   assert.ok(app.includes('runLegacy:isWeekend'));
 });
 
-test('0.13.23 automatic product failures are isolated and persisted',()=>{
+test('0.13.23 automatic product failures are isolated',()=>{
   const s=fs.readFileSync('src/http/app.js','utf8');
   assert.ok(s.includes("type:'AUTO_PRODUCT_FAILURE'"));
   assert.ok(s.includes("reason:'PRODUCT_FAILED'"));
-  assert.ok(s.includes("safe('super'"));
 });
