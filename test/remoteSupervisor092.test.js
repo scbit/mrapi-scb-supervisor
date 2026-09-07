@@ -18,6 +18,6 @@ test('weekend opportunity scale is not CRM lead quality',()=>{
 });
 test('0.9.2 UI hides manual conversation correction entry and exposes days/weekend',()=>{
   const html=fs.readFileSync('public/index.html','utf8');
-  for(const x of ['Guardia sábado y domingo','Un grupo por vendedor','Grupo general del día','Revisar vendedores cada 30 min'])assert.ok(html.includes(x),x);
+  for(const x of ['Guardia sábado y domingo','Un grupo por vendedor','Grupo general del día','Revisar vendedores cada 45 min'])assert.ok(html.includes(x),x);
   assert.equal(html.includes('placeholder="conversationId"'),false);
 });

@@ -204,3 +204,12 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - El row conserva también textos BOT para fallback de contexto.
 - Caso de calibración: Walid debe poder recuperar `cortadora circular de carpintero de mano`.
 - Nueva caché `guide_v1_product_context_v1`.
+
+## v0.13.11 — Supervisor en Vivo cada 45 minutos
+- No cambia la lógica comercial aprobada de v0.13.10.
+- Frecuencia efectiva por vendedor: 45 minutos.
+- Migra automáticamente el valor legacy de 30 minutos a 45.
+- El runtime usa Network Setup como source of truth de la frecuencia, aun si un supervisor viejo conservaba `frequencyMinutes: 30`.
+- Mantiene L–V 09:00–17:00 y pausa 12:00–13:00.
+- NO incorpora comparación entre cortes; se hará en una misión posterior.
+- La automatización real requiere que Cloud Scheduler invoque `/api/supervisor/remote/tick`; el endpoint ya aplica gating de 45 minutos.

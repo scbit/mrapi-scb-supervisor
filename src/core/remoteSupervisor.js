@@ -92,13 +92,14 @@ class RemoteSupervisorService{
 
   defaultNetworkSettings(){
     return{timezone:'America/Argentina/Buenos_Aires',coaching:{enabled:false,responseWaitingMinutes:15,maxAiReviewsPerSellerTick:0},liveDaily:{enabled:true,deliveryMode:'DRY_RUN',safety:{maxConversationsPerTick:250,maxDealsPerTick:2000,maxHunterEventsPerTick:5000,maxTelegramPerTick:25,maxTickSeconds:180,maxConsecutiveFailures:3,lockMinutes:15}},
-      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:30,generalFrequencyMinutes:60,generalChatId:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
+      weekday:{days:['Mon','Tue','Wed','Thu','Fri'],startTime:'09:00',endTime:'17:00',pauseStart:'12:00',pauseEnd:'13:00',sellerFrequencyMinutes:45,generalFrequencyMinutes:60,generalChatId:null,generalDays:['Mon','Tue','Wed','Thu','Fri'],generalStartTime:'09:00',generalEndTime:'17:00'},
       weekend:{days:['Sat','Sun'],startTime:'09:00',endTime:'24:00',frequencyMinutes:120,chatId:null,minimumSignal:'MUY_INTERESANTE',sendStats:true,alertImportant:true}
     };
   }
   async getNetworkSetup(){
     const defaults=this.defaultNetworkSettings(),saved=await this.store.getSupervisionSettings()||{},settings={...defaults,...saved,coaching:{...defaults.coaching,...(saved.coaching||{})},liveDaily:{...defaults.liveDaily,...(saved.liveDaily||{}),safety:{...defaults.liveDaily.safety,...(saved.liveDaily?.safety||{})}},weekday:{...defaults.weekday,...(saved.weekday||{})},weekend:{...defaults.weekend,...(saved.weekend||{})}};
-    const supervisors=(await this.listSupervisors()).filter(x=>x.mode==='SELLER_GROUP');
+    if(Number(settings.weekday.sellerFrequencyMinutes||30)===30)settings.weekday.sellerFrequencyMinutes=45;
+    const supervisors=(await this.listSupervisors()).filter(x=>x.mode==='SELLER_GROUP').map(x=>({...x,frequencyMinutes:Number(settings.weekday.sellerFrequencyMinutes||45)}));
     return{settings,sellers:await this.listSellerOptions(),sellerGroups:supervisors};
   }
   async saveNetworkSetup(input={}){
@@ -295,7 +296,9 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     return{id:id('weekend_guard'),supervisorId:cfg.id,mode:'weekend_guard',generatedAt:now.toISOString(),summary:{alerts:candidates.length},text:lines.join('\n')};
   }
   async runSupervisor(supervisorId,{now=new Date(),send=true,force=false,activeDeals=null}={}){
-    const cfg=await this.store.getRemoteSupervisor(supervisorId);if(!cfg)throw new Error('REMOTE_SUPERVISOR_NOT_FOUND');if(!cfg.enabled&&!force)return{skipped:true,reason:'disabled'};
+    let cfg=await this.store.getRemoteSupervisor(supervisorId);if(!cfg)throw new Error('REMOTE_SUPERVISOR_NOT_FOUND');if(!cfg.enabled&&!force)return{skipped:true,reason:'disabled'};
+    const network=await this.getNetworkSetup(),effectiveFrequency=Number(network.settings?.weekday?.sellerFrequencyMinutes||45);
+    cfg={...cfg,frequencyMinutes:effectiveFrequency};
     const sched=scheduleMode(cfg,now);if(!sched.active&&!force)return{skipped:true,reason:sched.reason};
     if(sched.mode==='weekend_guard'&&!force){
       const last=await this.store.getRemoteCheckpoint(`weekend_last_${cfg.id}`),freq=cfg.weekend.frequencyMinutes;if(last?.at&&now.getTime()-new Date(last.at).getTime()<freq*60000)return{skipped:true,reason:'weekend_frequency_not_due'};
@@ -304,7 +307,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
       await this.store.saveRemoteReport(report.id,report);let sent=null;if(send)sent=await this.telegram.send(report.text);return{skipped:false,mode:'weekend_guard',report,sent};
     }
     const last=await this.store.getRemoteCheckpoint(`last_send_${cfg.id}`);if(!force&&last?.at&&now.getTime()-new Date(last.at).getTime()<cfg.frequencyMinutes*60000)return{skipped:true,reason:'frequency_not_due'};
-    const setup=await this.getNetworkSetup(),liveCfg=setup.settings.liveDaily||{enabled:true,deliveryMode:'DRY_RUN'};if(liveCfg.enabled===false)return{skipped:true,reason:'live_daily_disabled'};
+    const setup=network,liveCfg=setup.settings.liveDaily||{enabled:true,deliveryMode:'DRY_RUN'};if(liveCfg.enabled===false)return{skipped:true,reason:'live_daily_disabled'};
     const analysis=await this.liveDaily.analyzeSellerGroup(cfg,{now,activeDeals,dateOverride}),built=this.liveDaily.buildTelegramReport(cfg,analysis,{now,deliveryMode:liveCfg.deliveryMode||'DRY_RUN'});
     const report={id:id('live_daily_report'),supervisorId:cfg.id,date:analysis.date,mode:'weekday_live_daily',generatedAt:now.toISOString(),summary:built.summary,text:built.text};await this.store.saveLiveDailyReport(report.id,report);
     const canSend=send&&(liveCfg.deliveryMode||'DRY_RUN')==='ACTIVE';let sent=null;if(canSend&&cfg.telegramChatId){sent=await this.telegram.send(report.text,cfg.telegramChatId);await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id})}else if(!last?.at||force)await this.store.saveRemoteCheckpoint(`last_send_${cfg.id}`,{at:now.toISOString(),reportId:report.id,dryRun:true});
