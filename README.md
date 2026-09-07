@@ -179,3 +179,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - La tardanza queda como métrica separada de calidad comercial.
 - Producto reforzado leyendo todos los mensajes reales del cliente + fallback para frases explícitas de importar/traer/comprar.
 - Nueva caché `guide_v1_advance_v1`.
+
+## v0.13.8 — Mostrar TODOS los chats
+- Supervisor en Vivo muestra todos los chats del vendedor con actividad en el corte.
+- Cada chat aparece exactamente una vez en `TODOS LOS CHATS DEL DÍA`.
+- Estados visibles: PENDIENTE/A CORREGIR, BIEN TRABAJADO, SEGUIMIENTO CORRECTO, REVISAR SEGUIMIENTO o REVISAR.
+- El resumen agrega `Chats del día`; debe coincidir con los casos listados.
+- Seguimientos sin inbound muestran `Seguimiento: ...`, nunca `A TIEMPO · 0 min`.
+- Nueva caché `guide_v1_all_chats_v1`.

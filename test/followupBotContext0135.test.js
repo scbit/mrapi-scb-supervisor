@@ -19,7 +19,7 @@ test('0.13.5 contextual follow-up can remain correct',()=>{
   const out=applyAi(row,{follow_up_quality:'CORRECTO',product_defined:true,product_name:'TV Box',commercial_discovery_level:'medio',did_ask_volume_potential:true,overall_score:80});
   assert.equal(out.followUpCorrect,true);
   const t=liveText({date:'2026-09-04',cutoff:17,label:'Augusto',rows:[out]});
-  assert.ok(t.includes('SEGUIMIENTOS CORRECTOS'));
+  assert.ok(t.includes('TODOS LOS CHATS DEL DÍA'));
   assert.ok(t.includes('CORRECTO · 2 intentos'));
 });
 test('0.13.5 AI prompt explicitly requires inheriting bot context',()=>{

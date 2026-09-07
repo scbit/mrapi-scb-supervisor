@@ -13,6 +13,6 @@ test('0.13.4 live report exposes correct follow-ups separately',()=>{
  const row={conversationId:'2',contactName:'Dormido',seller:'x',inboundCount:0,humanResponded:true,humanCount:1,followUpOk:true,followUpCorrect:true,sellerFollowUpInWindow:true,followUpAttemptsAfterLastClient:3,ai:{}};
  const t=liveText({date:'2026-09-04',cutoff:17,label:'Augusto',rows:[row]});
  assert.ok(t.includes('Seguimientos correctos: 1'));
- assert.ok(t.includes('SEGUIMIENTOS CORRECTOS'));
+ assert.ok(t.includes('TODOS LOS CHATS DEL DÍA'));
  assert.ok(t.includes('CORRECTO · 3 intentos'));
 });
