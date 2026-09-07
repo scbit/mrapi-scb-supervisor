@@ -122,3 +122,11 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Oportunidades con producto definido y link HUB.
 - Cierre con cartera vencida y +7 días.
 - Botones de prueba manual y envío Telegram; scheduler permanece sin automatizar.
+
+## v0.13.1 — Telegram seller editor
+- La configuración Telegram por vendedor sigue compacta.
+- Cada vendedor tiene botón Editar.
+- Al editar se muestra desplegable con los grupos/chats detectados por el bot.
+- Permite conservar el Chat ID actual aunque no aparezca en la detección.
+- Permite ingresar Chat ID manual como fallback.
+- Guardar actualiza solo ese vendedor mediante el contrato existente de network/setup.
