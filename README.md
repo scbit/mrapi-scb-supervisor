@@ -162,3 +162,13 @@ La UI permite validar conectividad de mrapi-email, enviar pruebas de Email/Teleg
 - Seguimiento correcto exige avanzar: modalidad (courier/marítimo según cantidad), volumen/proveedor/origen, recomendación SCB o próximo paso concreto.
 - Un seguimiento insuficiente entra en CLIENTES A CORREGIR y sale de SEGUIMIENTOS CORRECTOS.
 - Nueva caché `guide_v1_followup_v2` para no reutilizar análisis anteriores.
+
+## v0.13.6 — Meta Ad bootstrap + 3-touch activation
+- El primer CTA automático de Meta Ads se ignora como respuesta real del cliente cuando dispara una respuesta BOT inmediata.
+- Si no hubo respuesta real del cliente, el primer día de intervención humana es ACTIVACIÓN INICIAL.
+- Regla de activación: mínimo 3 contactos útiles ese día.
+- Menos de 3 intentos entra en CLIENTES A CORREGIR.
+- Después de 3 intentos sin respuesta, el caso pasa a seguimiento pasivo cada 7-10 días.
+- Supervisor debe mantener visible que la próxima fecha CRM no puede quedar vencida.
+- En activaciones ya no se muestra `Respuesta: A TIEMPO · 0 min`; se muestra `ACTIVACIÓN INICIAL · x/3 mensajes`.
+- Nueva caché `guide_v1_followup_v3`.

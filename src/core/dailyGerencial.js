@@ -47,8 +47,28 @@ function buildLeadQualityInsights(deals,rows){
   return{available:true,excellentTotal:excellent.length,excellentMatched:poorly.length+well.length,excellentPoorlyWorked:poorly,excellentWellWorked:well,source:'bscrmscb/deals.leadQuality + Supervisor daily rows'};
 }
 
+
+function adSignal(conversation={}){
+  return !!(conversation.adId||conversation.adTitle||String(conversation.sourceChannel||'').toLowerCase().includes('meta')||String(conversation.sourceOrigin||'').toLowerCase()==='ad');
+}
+function adBootstrapMessageIds(conversation,all=[]){
+  if(!adSignal(conversation))return new Set();
+  const firstClientIndex=all.findIndex(m=>actor(m)==='client');
+  if(firstClientIndex<0)return new Set();
+  const first=all[firstClientIndex],next=all.slice(firstClientIndex+1).find(m=>['bot','human'].includes(actor(m)));
+  if(!next||actor(next)!=='bot')return new Set();
+  const delta=(new Date(next.timestamp)-new Date(first.timestamp))/1000;
+  if(!Number.isFinite(delta)||delta<0||delta>15)return new Set();
+  return new Set([first.id||`idx_${firstClientIndex}`]);
+}
+function sameLocalDate(a,b){
+  const fmt=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Argentina/Buenos_Aires',year:'numeric',month:'2-digit',day:'2-digit'});
+  return fmt.format(new Date(a))===fmt.format(new Date(b));
+}
 function analyzeConversation(conversation,messages,range,lateMinutes=30){
-  const all=(messages||[]).filter(m=>m.timestamp).slice().sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+  const raw=(messages||[]).filter(m=>m.timestamp).slice().sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp));
+  const ignoredAdIds=adBootstrapMessageIds(conversation,raw);
+  const all=raw.filter((m,i)=>!ignoredAdIds.has(m.id||`idx_${i}`));
   const win=all.filter(m=>inRange(m.timestamp,range.from,range.to));
   const inbound=win.filter(m=>actor(m)==='client'),bot=win.filter(m=>actor(m)==='bot'),human=win.filter(m=>actor(m)==='human');
   const seller=sellerName(conversation,all)||conversation.owner||'No detectado';
@@ -60,6 +80,21 @@ function analyzeConversation(conversation,messages,range,lateMinutes=30){
   const sellerFollowUpInWindow=human.length>0&&inbound.length===0&&!!lastClientAll;
   const readyToDiscardNoResponse=followUpAttemptsAfterLastClient>=10&&!!lastClientAll&&(!lastHumanAll||new Date(lastHumanAll.timestamp)>new Date(lastClientAll.timestamp));
   const followUpOk=sellerFollowUpInWindow&&followUpAttemptsAfterLastClient>0&&followUpAttemptsAfterLastClient<10;
+
+  // Meta Ads: the automatic CTA/quick-reply is not a real customer reply.
+  // If the customer never answered after that bootstrap, the first human-contact day
+  // is an ACTIVE activation day: minimum 3 useful human touches that day.
+  const realClientsAll=all.filter(m=>actor(m)==='client');
+  const humansAll=all.filter(m=>actor(m)==='human');
+  const firstHuman=humansAll[0]||null;
+  const adBootstrapIgnored=ignoredAdIds.size>0;
+  const noRealCustomerReply=adBootstrapIgnored&&realClientsAll.length===0;
+  const leadActivationDay=!!(noRealCustomerReply&&firstHuman&&sameLocalDate(firstHuman.timestamp,range.from));
+  const leadActivationAttempts=leadActivationDay?human.length:0;
+  const leadActivationRequired=leadActivationDay;
+  const leadActivationInsufficient=leadActivationRequired&&leadActivationAttempts<3;
+  const leadActivationComplete=leadActivationRequired&&leadActivationAttempts>=3;
+
   const responseTimes=[],lateResponses=[];let pendingClientMessages=0;
   for(let i=0;i<win.length;i++){
     const m=win[i];if(actor(m)!=='client')continue;
@@ -76,9 +111,21 @@ function analyzeConversation(conversation,messages,range,lateMinutes=30){
   }
   if(noHumanResponse&&lastClient){const available=mins(lastClient.timestamp,range.to.toISOString());if(available!==null&&available<lateMinutes){businessCloseGrace=true;noHumanResponse=false;botOnly=false;pendingClientMessages=0}}
   const avg=responseTimes.length?Math.round(responseTimes.reduce((a,b)=>a+b,0)/responseTimes.length):null,max=responseTimes.length?Math.max(...responseTimes):null;
-  return{conversationId:conversation.id,contactName:conversation.contactName||conversation.phone||'sin dato',phone:conversation.phone||'',owner:conversation.owner||seller,seller,stage:conversation.stage||'',dealId:conversation.dealId||'',sourceChannel:conversation.sourceChannel||'',messagesInWindow:win.length,inboundCount:inbound.length,botCount:bot.length,humanCount:human.length,humanResponded,botOnly,noHumanResponse,needsHumanNow:noHumanResponse||botOnly||pendingClientMessages>0,pendingClientMessages,avgHumanResponseMinutes:avg,avgResponseMinutes:avg,maxHumanResponseMinutes:max,lateCount:lateResponses.length,lateResponses,lastActor:lastWin?actor(lastWin):'',lastClientAt:lastClient?.timestamp||'',lastHumanAt:lastHuman?.timestamp||'',lastBotAt:lastBot?.timestamp||'',lastClientText:textForReport(lastClient).slice(0,300),lastHumanText:textForReport(lastHuman).slice(0,300),humanTexts:human.slice(-3).map(m=>({at:m.timestamp,user:m.user||seller,text:textForReport(m).slice(0,500)})),followUpAttemptsAfterLastClient,followUpAttemptsInWindow,sellerFollowUpInWindow,followUpOk,readyToDiscardNoResponse,respondedOutsideBusinessHours,businessCloseGrace,afterHoursHumanAt};
+  return{
+    conversationId:conversation.id,contactName:conversation.contactName||conversation.phone||'sin dato',phone:conversation.phone||'',owner:conversation.owner||seller,seller,stage:conversation.stage||'',dealId:conversation.dealId||'',sourceChannel:conversation.sourceChannel||'',
+    messagesInWindow:win.length,inboundCount:inbound.length,botCount:bot.length,humanCount:human.length,humanResponded,botOnly,noHumanResponse,
+    needsHumanNow:noHumanResponse||botOnly||pendingClientMessages>0||leadActivationInsufficient,pendingClientMessages,
+    avgHumanResponseMinutes:avg,avgResponseMinutes:avg,maxHumanResponseMinutes:max,lateCount:lateResponses.length,lateResponses,
+    lastActor:lastWin?actor(lastWin):'',lastClientAt:lastClient?.timestamp||'',lastHumanAt:lastHuman?.timestamp||'',lastBotAt:lastBot?.timestamp||'',
+    lastClientText:textForReport(lastClient).slice(0,300),lastHumanText:textForReport(lastHuman).slice(0,300),
+    humanTexts:human.slice(-5).map(m=>({at:m.timestamp,user:m.user||seller,text:textForReport(m).slice(0,500)})),
+    followUpAttemptsAfterLastClient,followUpAttemptsInWindow,sellerFollowUpInWindow,followUpOk,readyToDiscardNoResponse,
+    adBootstrapIgnored,ignoredAdBootstrapCount:ignoredAdIds.size,noRealCustomerReply,
+    leadActivationRequired,leadActivationAttempts,leadActivationInsufficient,leadActivationComplete,
+    passiveFollowUpCadenceDays:'7-10',respondedOutsideBusinessHours,businessCloseGrace,afterHoursHumanAt
+  };
 }
-function needsAi(row){return !!(row.humanResponded&&row.humanTexts?.length&&(row.inboundCount>0||row.lateCount>0||row.sellerFollowUpInWindow))}
+function needsAi(row){return !!(row.humanResponded&&row.humanTexts?.length&&(row.inboundCount>0||row.lateCount>0||row.sellerFollowUpInWindow||row.leadActivationInsufficient))}
 function arr(v){return Array.isArray(v)?v:[]}
 function applyAi(row,ai){
   if(!ai)return row;

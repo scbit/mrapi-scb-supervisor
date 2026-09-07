@@ -46,6 +46,10 @@ Criterio comercial — Guía SCB v1.0:
 - Si el BOT ya descubrió producto, uso, negocio, proveedor, intención u otros datos, el VENDEDOR HUMANO debe CONTINUAR desde ese contexto. Repetir discovery ya resuelto o entrar con un saludo genérico sin avanzar NO es seguimiento correcto.
 - Un seguimiento humano solo es CORRECTO si aprovecha el contexto previo y hace avanzar la oportunidad: por ejemplo recomienda courier/marítimo según cantidad, pide volumen/proveedor/origen cuando falta, explica valor SCB o deja próximo paso concreto.
 - Mensajes como 'Hola, ¿cómo estás?', '¿seguís interesado?', 'cualquier cosa avisame' o equivalentes, por sí solos, son seguimiento INSUFICIENTE cuando el cliente ya mostró interés o el bot ya había hecho discovery.
+- En leads de Meta Ads, el mensaje automático/CTA que dispara la publicidad NO cuenta como respuesta real del cliente.
+- Si después del CTA publicitario el cliente nunca respondió de verdad, el primer día de intervención humana es ACTIVACIÓN INICIAL: el vendedor debe intentar como mínimo 3 contactos útiles ese día para forzar una respuesta.
+- Si esos 3 intentos no logran respuesta, el caso pasa a SEGUIMIENTO PASIVO: nuevo contacto cada 7 a 10 días y la próxima fecha del CRM debe mantenerse vigente, nunca vencida.
+- Un único 'Hola, ¿cómo estás?' en la activación inicial es insuficiente aunque exista un mensaje automático de publicidad previo.
 - No inventes producto. Si no es claro, product_defined=false y product_name=''.
 - product_source debe ser CLIENTE si el cliente ya lo dijo/mandó, VENDEDOR_DESCUBRIO si surge porque el vendedor preguntó bien, o NO_CLARO.
 
