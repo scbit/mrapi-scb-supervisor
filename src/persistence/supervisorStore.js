@@ -12,7 +12,22 @@ async saveReport(id,data){await this.db.collection(this.c.reports).doc(id).set({
 async saveDailyJob(id,data){await this.db.collection(this.c.dailyJobs).doc(String(id)).set({...data,updatedAt:new Date().toISOString()},{merge:true})}async getDailyJob(id){const d=await this.db.collection(this.c.dailyJobs).doc(String(id)).get();return d.exists?{id:d.id,...d.data()}:null}
 async saveDailyItem(jobId,conversationId,data){const id=`${jobId}__${Buffer.from(String(conversationId)).toString('base64url').slice(0,160)}`;await this.db.collection(this.c.dailyItems).doc(id).set({jobId,conversationId,...data,updatedAt:new Date().toISOString()},{merge:true})}async listDailyItems(jobId,limit=1000){const s=await this.db.collection(this.c.dailyItems).where('jobId','==',String(jobId)).limit(limit).get();return s.docs.map(d=>({id:d.id,...d.data()}))}
 async getDailyReview(date,conversationId){const id=`${date}__${Buffer.from(String(conversationId)).toString('base64url').slice(0,160)}`;const d=await this.db.collection(this.c.dailyReviews).doc(id).get();return d.exists?d.data().ai:null}async saveDailyReview(date,conversationId,ai){const id=`${date}__${Buffer.from(String(conversationId)).toString('base64url').slice(0,160)}`;await this.db.collection(this.c.dailyReviews).doc(id).set({date,conversationId,ai,updatedAt:new Date().toISOString()},{merge:true})}
-async saveDailyReport(date,data){await this.db.collection(this.c.dailyReports).doc(String(date)).set({...data,updatedAt:new Date().toISOString()},{merge:true})}async getDailyReport(date){const d=await this.db.collection(this.c.dailyReports).doc(String(date)).get();return d.exists?{id:d.id,...d.data()}:null}async getLatestDailyReport(){const s=await this.db.collection(this.c.dailyReports).orderBy('generatedAt','desc').limit(1).get();return s.empty?null:{id:s.docs[0].id,...s.docs[0].data()}}
+async saveDailyReport(date,data){
+  const payload={...data,updatedAt:new Date().toISOString()};
+  if(Array.isArray(payload.rows)&&payload.sourceJobId){payload.rowCount=payload.rows.length;payload.rowsStorage='dailyItems';delete payload.rows}
+  await this.db.collection(this.c.dailyReports).doc(String(date)).set(payload,{merge:true})
+}
+async hydrateDailyReport(id,data){
+  if(!data)return null;
+  const out={id,...data};
+  if(!Array.isArray(out.rows)&&out.rowsStorage==='dailyItems'&&out.sourceJobId){
+    const rowsAll=await this.listDailyItems(out.sourceJobId,1000);
+    out.rows=rowsAll.filter(r=>!r.excludedFromReport).map(r=>({...r,hubUrl:r.hubUrl||`https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(r.conversationId||'')}`}));
+  }
+  return out
+}
+async getDailyReport(date){const d=await this.db.collection(this.c.dailyReports).doc(String(date)).get();return d.exists?this.hydrateDailyReport(d.id,d.data()):null}
+async getLatestDailyReport(){const s=await this.db.collection(this.c.dailyReports).orderBy('generatedAt','desc').limit(1).get();return s.empty?null:this.hydrateDailyReport(s.docs[0].id,s.docs[0].data())}
 async saveRemoteSupervisor(id,data){await this.db.collection(this.c.remoteSupervisors).doc(String(id)).set({...data,id:String(id),updatedAt:new Date().toISOString()},{merge:true})}
 async getRemoteSupervisor(id){const d=await this.db.collection(this.c.remoteSupervisors).doc(String(id)).get();return d.exists?{id:d.id,...d.data()}:null}
 async listRemoteSupervisors(limit=100){const s=await this.db.collection(this.c.remoteSupervisors).limit(limit).get();return s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(a.name||a.id).localeCompare(String(b.name||b.id)))}
