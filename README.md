@@ -364,3 +364,15 @@ Objetivo de costo:
   - `/api/supervisor/remote/tick` = reportes;
   - `/api/supervisor/sync/tick` = sync incremental.
 - El objetivo de costo se mantiene: seller cache existente se reutiliza; no se fuerza IA (`forceAi:false`).
+
+
+## v0.13.26 — LIVE STABILITY + SNAPSHOTS + FIXED SLOTS
+
+- Supervisor en Vivo automático: 09:00, 11:00, 12:00, 14:00, 15:00 y 16:00 (America/Argentina/Buenos_Aires).
+- No envía Telegram para vendedores/grupos sin actividad relevante en el corte.
+- Mantiene clasificación BIEN TRABAJADO / SEGUIMIENTO CORRECTO cuando la evidencia del chat no cambió; una nueva evidencia puede reabrir la evaluación.
+- Cada reporte Live persiste snapshot, estado por conversación, firma de evidencia y evolución del vendedor.
+- El reporte muestra correcciones desde el corte anterior, nuevos problemas, problemas abiertos y resumen de hasta 7 días con actividad.
+- Estado actual manda: un caso pendiente en un corte puede aparecer corregido en el siguiente, conservando la historia en snapshots.
+- Reutiliza `supervisor_v3_live_daily_reports`; no agrega infraestructura ni toca fuentes operativas READ ONLY.
+- SUPER SUPERVISOR continúa 10:00/14:00 y Cierre Gerencial 17:00.

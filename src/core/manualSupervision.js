@@ -1,5 +1,6 @@
 const {hubUrl}=require('./dailyGerencial');
 const {daysOverdue}=require('./time');
+const crypto=require('crypto');
 
 function norm(v){return String(v||'').trim().toLowerCase()}
 function sellerMatch(r,key){return norm(r?.seller||r?.owner)===norm(key)}
@@ -20,6 +21,8 @@ function commercialAdvance(row){
   return row?.commercialAdvance===true||row?.goodCommercialResponse===true
 }
 function needsCorrection(row){
+  if(row?._stableStatus==='BIEN TRABAJADO'||row?._stableStatus==='SEGUIMIENTO CORRECTO')return false;
+  if(row?._stableStatus==='A CORREGIR')return true;
   if(row.leadActivationInsufficient||row.followUpNeedsCorrection||row.noHumanResponse||row.botOnly||row.ai?.grave_failure===true)return true;
   if(row.inboundCount>0)return !commercialAdvance(row);
   return false
@@ -32,12 +35,14 @@ function responseStatus(row){if(row.leadActivationRequired)return`ACTIVACIÓN IN
 function followUpLabel(row){if(row.readyToDiscardNoResponse)return`PARA DESCARTAR · ${Number(row.followUpAttemptsAfterLastClient||0)} intentos`;if(row.followUpNeedsCorrection)return`INSUFICIENTE · ${Number(row.followUpAttemptsAfterLastClient||0)} intento${Number(row.followUpAttemptsAfterLastClient||0)===1?'':'s'}`;if(row.followUpCorrect)return`CORRECTO · ${Number(row.followUpAttemptsAfterLastClient||0)} intento${Number(row.followUpAttemptsAfterLastClient||0)===1?'':'s'}`;if(row.sellerFollowUpInWindow)return`REVISAR · ${Number(row.followUpAttemptsAfterLastClient||0)} intento${Number(row.followUpAttemptsAfterLastClient||0)===1?'':'s'}`;return'NO APLICA'}
 function humanCorrectionStatus(v){const x=String(v||'PENDIENTE').toUpperCase();if(x==='CORRECTED'||x==='CORREGIDA')return'CORREGIDA';if(x==='NOT_CORRECTED'||x==='NO_CORREGIDA')return'NO_CORREGIDA';return'PENDIENTE'}
 function productDiscoveryLabel(p){if(p.sellerDiscovered||p.source==='VENDEDOR_DESCUBRIO'||p.source==='SELLER')return'VENDEDOR';if(p.source==='CLIENTE'||p.source==='CUSTOMER')return'CLIENTE';return p.defined?'CLIENTE / CONTEXTO':'NO IDENTIFICADO'}
-function rowCase(row){const p=product(row);return{conversationId:row.conversationId,contactName:row.contactName||'Sin nombre',seller:row.seller||row.owner||'',product:p,profile:profile(row),severity:severity(row),needsCorrection:needsCorrection(row),reason:caseReason(row),expected:expected(row),hubUrl:row.hubUrl||hubUrl(row.conversationId),lastClientText:row.lastClientText||'',lastHumanText:row.lastHumanText||'',lateMinutes:row.maxHumanResponseMinutes||0,responseStatus:responseStatus(row),followUpStatus:followUpLabel(row),followUpAttempts:Number(row.followUpAttemptsAfterLastClient||0),checklist:checklist(row),opportunity:p.defined===true}}
+function evidenceSignature(row){const payload={conversationId:row?.conversationId||'',messagesInWindow:Number(row?.messagesInWindow||0),inboundCount:Number(row?.inboundCount||0),humanCount:Number(row?.humanCount||0),followUpAttempts:Number(row?.followUpAttemptsAfterLastClient||0),lastClientText:String(row?.lastClientText||''),lastHumanText:String(row?.lastHumanText||''),lastMessageAt:String(row?.lastMessageAt||row?.sourceUpdatedAt||''),clientTexts:Array.isArray(row?.clientTexts)?row.clientTexts:[],humanTexts:Array.isArray(row?.humanTexts)?row.humanTexts.map(x=>x?.text||x):[]};return crypto.createHash('sha1').update(JSON.stringify(payload)).digest('hex')}
+function rowCase(row){const p=product(row);return{conversationId:row.conversationId,contactName:row.contactName||'Sin nombre',seller:row.seller||row.owner||'',product:p,profile:profile(row),severity:severity(row),needsCorrection:needsCorrection(row),reason:caseReason(row),expected:expected(row),hubUrl:row.hubUrl||hubUrl(row.conversationId),lastClientText:row.lastClientText||'',lastHumanText:row.lastHumanText||'',lateMinutes:row.maxHumanResponseMinutes||0,responseStatus:responseStatus(row),followUpStatus:followUpLabel(row),followUpAttempts:Number(row.followUpAttemptsAfterLastClient||0),checklist:checklist(row),opportunity:p.defined===true,status:displayStatus(row),evidenceSignature:evidenceSignature(row)}}
 
 function visibleDailyRows(rows){
   return (rows||[]).filter(r=>Number(r.messagesInWindow||0)>0||Number(r.humanCount||0)>0||Number(r.inboundCount||0)>0||r.sellerFollowUpInWindow||r.leadActivationRequired);
 }
 function displayStatus(row){
+  if(row?._stableStatus)return row._stableStatus;
   if(needsCorrection(row))return'A CORREGIR';
   if(row.followUpCorrect)return'SEGUIMIENTO CORRECTO';
   if(row.sellerFollowUpInWindow)return'REVISAR SEGUIMIENTO';
@@ -51,16 +56,17 @@ function goodReason(row){
 }
 function metrics(rows){
   const visible=visibleDailyRows(rows),clients=visible.filter(x=>x.inboundCount>0),allCases=visible.map(rowCase),goodRows=visible.filter(x=>displayStatus(x)==='BIEN TRABAJADO'),followUps=visible.filter(x=>x.followUpCorrect),maxDelay=Math.max(0,...clients.map(x=>Number(x.maxHumanResponseMinutes||0)));
-  return{visibleChats:visible.length,clients:clients.length,responded:clients.filter(x=>x.humanResponded).length,noResponse:clients.filter(x=>x.noHumanResponse).length,late:clients.filter(x=>x.lateCount>0).length,maxDelayMinutes:maxDelay,activationToCorrect:visible.filter(x=>x.leadActivationInsufficient).length,followUpsCorrect:followUps.length,followUpsToCorrect:visible.filter(x=>x.followUpNeedsCorrection).length,followUpsReview:visible.filter(x=>x.sellerFollowUpInWindow&&!x.followUpCorrect&&!x.followUpNeedsCorrection).length,good:goodRows.length,toCorrect:visible.filter(x=>needsCorrection(x)).length,opportunities:allCases.filter(x=>x.opportunity).length,grave:allCases.filter(x=>x.severity==='GRAVE').length,hyperGrave:allCases.filter(x=>x.severity==='HIPER_GRAVE').length,goodPct:pct(goodRows.length,visible.length),correctionPct:pct(visible.filter(x=>needsCorrection(x)).length,Math.max(1,visible.length))}
+  return{visibleChats:visible.length,clients:clients.length,responded:clients.filter(x=>x.humanResponded).length,noResponse:clients.filter(x=>x.noHumanResponse).length,late:clients.filter(x=>x.lateCount>0).length,maxDelayMinutes:maxDelay,activationToCorrect:visible.filter(x=>x.leadActivationInsufficient).length,followUpsCorrect:followUps.length,followUpsToCorrect:visible.filter(x=>x.followUpNeedsCorrection).length,followUpsReview:visible.filter(x=>x.sellerFollowUpInWindow&&!x.followUpCorrect&&!x.followUpNeedsCorrection).length,good:goodRows.length,toCorrect:visible.filter(x=>displayStatus(x)==='A CORREGIR').length,opportunities:allCases.filter(x=>x.opportunity).length,grave:allCases.filter(x=>x.severity==='GRAVE').length,hyperGrave:allCases.filter(x=>x.severity==='HIPER_GRAVE').length,goodPct:pct(goodRows.length,visible.length),correctionPct:pct(visible.filter(x=>displayStatus(x)==='A CORREGIR').length,Math.max(1,visible.length))}
 }
-function liveText({date,cutoff,label,rows,trend='BASELINE',correctionStatuses={}}){
+function liveText({date,cutoff,label,rows,trend='BASELINE',correctionStatuses={},evolution=null}){
   const visible=visibleDailyRows(rows),m=metrics(visible);
   const L=[`📊 SUPERVISOR EN VIVO — ${label}`,`${date} · corte ${cutoff}:00 · acumulado desde 09:00`,'',
     `Está trabajando: ${visible.some(x=>x.humanResponded||x.humanCount>0)?'SÍ':'NO'} · Tendencia: ${trend}`,
     `Chats del día: ${m.visibleChats} · Clientes que escribieron: ${m.clients} · Respondidos: ${m.responded}`,
     `Tarde: ${m.late}${m.maxDelayMinutes?` · Máxima demora: ${humanMinutes(m.maxDelayMinutes)}`:''}`,
     `Activaciones a corregir: ${m.activationToCorrect} · Seguimientos correctos: ${m.followUpsCorrect} · Seguimientos a corregir: ${m.followUpsToCorrect} · Seguimientos a revisar: ${m.followUpsReview}`,
-    `Bien trabajados: ${m.good} · A corregir: ${m.toCorrect} · Oportunidades: ${m.opportunities}`,'',
+    `Bien trabajados: ${m.good} · A corregir: ${m.toCorrect} · Oportunidades: ${m.opportunities}`,
+    ...(evolution?[`Evolución hoy: corregidos ${Number(evolution.correctedSincePrevious||0)} · nuevos a corregir ${Number(evolution.newProblems||0)} · siguen a corregir ${Number(evolution.openProblems||0)}`,evolution.week&&evolution.week.days>0?`Semana: ${evolution.week.days} día(s) con actividad · ${evolution.week.goodPct}% bien trabajados · ${evolution.week.correctionPct}% a corregir`:null].filter(Boolean):[]),'',
     `TODOS LOS CHATS DEL DÍA (${visible.length})`];
   if(!visible.length)L.push('Sin actividad en este corte.');
   visible.forEach((r,i)=>{
@@ -229,11 +235,25 @@ class ManualSupervisionService{
     }
     return this.dailyService.generate({date,endHour:Number(cutoff),forceAi,reportKey,reviewScope:'guide_v1_product_context_v1',sellerKey})
   }
-  async liveSellerFromBase({base,date,cutoff=17,sellerKey,sellerLabel}){const rows=(base?.rows||[]).filter(r=>sellerMatch(r,sellerKey));const previous=(await this.store.listLiveDailyReports(300,date)).find(r=>r.reportType==='supervisor_live_operational'&&norm(r.sellerKey)===norm(sellerKey)&&Number(r.cutoff||0)<Number(cutoff));const ms=metrics(rows),trend=trendFrom(previous,ms);const observations=await this.store.listLiveDailyObservationsForSellers([sellerKey],2000);const statuses={};for(const o of observations)if(String(o.sourceDate||'')===String(date)&&o.conversationId)statuses[o.conversationId]=humanCorrectionStatus(o.status);const report={id:`manual_live__${date}__${cutoff}__${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`,reportType:'supervisor_live_operational',date,cutoff:Number(cutoff),sellerKey:norm(sellerKey),sellerLabel,generatedAt:new Date().toISOString(),metrics:ms,cases:rows.filter(x=>x.inboundCount>0).map(rowCase),trend,text:liveText({date,cutoff,label:sellerLabel||sellerKey,rows,trend,correctionStatuses:statuses})};await this.store.saveLiveDailyReport(report.id,report);return report}
+  async liveSellerFromBase({base,date,cutoff=17,sellerKey,sellerLabel}){
+    const rawRows=(base?.rows||[]).filter(r=>sellerMatch(r,sellerKey)),allReports=await this.store.listLiveDailyReports(1000);
+    const priorToday=allReports.filter(r=>r.reportType==='supervisor_live_operational'&&String(r.date||'')===String(date)&&norm(r.sellerKey)===norm(sellerKey)&&Number(r.cutoff||0)<Number(cutoff)).sort((a,b)=>Number(b.cutoff||0)-Number(a.cutoff||0)||String(b.generatedAt||'').localeCompare(String(a.generatedAt||'')));
+    const previous=priorToday[0]||null,previousCases=new Map((previous?.cases||[]).map(c=>[String(c.conversationId),c]));
+    const rows=rawRows.map(r=>{const x={...r},prev=previousCases.get(String(r.conversationId)),sig=evidenceSignature(r),nowStatus=displayStatus(r);if(prev&&prev.evidenceSignature===sig&&['BIEN TRABAJADO','SEGUIMIENTO CORRECTO'].includes(String(prev.status||''))&&!['BIEN TRABAJADO','SEGUIMIENTO CORRECTO'].includes(nowStatus))x._stableStatus=String(prev.status);return x});
+    const ms=metrics(rows),currentCases=visibleDailyRows(rows).map(rowCase),currentMap=new Map(currentCases.map(c=>[String(c.conversationId),c]));
+    let correctedSincePrevious=0,newProblems=0;
+    for(const [cid,c] of currentMap){const prev=previousCases.get(cid);if(!prev)continue;const wasBad=String(prev.status||'')==='A CORREGIR',isBad=String(c.status||'')==='A CORREGIR';if(wasBad&&!isBad)correctedSincePrevious++;if(!wasBad&&isBad)newProblems++}
+    const latestByDate=new Map();for(const r of allReports.filter(r=>r.reportType==='supervisor_live_operational'&&norm(r.sellerKey)===norm(sellerKey)&&String(r.date||'')<String(date)).sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))||Number(b.cutoff||0)-Number(a.cutoff||0))){if(!latestByDate.has(r.date))latestByDate.set(r.date,r)}
+    const weekRows=[...latestByDate.values()].slice(0,6);if(ms.visibleChats>0)weekRows.unshift({date,metrics:ms});const weekActive=weekRows.filter(r=>Number(r.metrics?.visibleChats||0)>0).slice(0,7),weekVisible=weekActive.reduce((a,r)=>a+Number(r.metrics?.visibleChats||0),0),weekGood=weekActive.reduce((a,r)=>a+Number(r.metrics?.good||0),0),weekBad=weekActive.reduce((a,r)=>a+Number(r.metrics?.toCorrect||0),0);
+    const evolution={correctedSincePrevious,newProblems,openProblems:ms.toCorrect,previousCutoff:previous?.cutoff||null,week:{days:weekActive.length,goodPct:pct(weekGood,weekVisible),correctionPct:pct(weekBad,weekVisible)}};
+    const trend=correctedSincePrevious>newProblems?'MEJORANDO':newProblems>correctedSincePrevious?'EMPEORANDO':trendFrom(previous,ms);
+    const observations=await this.store.listLiveDailyObservationsForSellers([sellerKey],2000);const statuses={};for(const o of observations)if(String(o.sourceDate||'')===String(date)&&o.conversationId)statuses[o.conversationId]=humanCorrectionStatus(o.status);
+    const report={id:`manual_live__${date}__${cutoff}__${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`,reportType:'supervisor_live_operational',date,cutoff:Number(cutoff),sellerKey:norm(sellerKey),sellerLabel,generatedAt:new Date().toISOString(),metrics:ms,cases:currentCases,trend,evolution,text:liveText({date,cutoff,label:sellerLabel||sellerKey,rows,trend,correctionStatuses:statuses,evolution})};await this.store.saveLiveDailyReport(report.id,report);return report
+  }
   async liveSeller({date,cutoff=17,sellerKey,sellerLabel,forceAi=true}){const base=await this.base(date,cutoff,forceAi,sellerKey);return this.liveSellerFromBase({base,date,cutoff,sellerKey,sellerLabel})}
   async superSupervisorFromBase({base,date,cutoff=10}){const rows=base?.rows||[];const report={id:`super_supervisor__${date}__${cutoff}`,reportType:'super_supervisor',date,cutoff:Number(cutoff),generatedAt:new Date().toISOString(),metrics:metrics(rows),text:superText({date,cutoff,rows})};await this.store.saveLiveDailyReport(report.id,report);return report}
   async superSupervisor({date,cutoff=10,forceAi=true}){const base=await this.base(date,cutoff,forceAi);return this.superSupervisorFromBase({base,date,cutoff})}
   async closingFromBase({base,date}){const dealStates=await this.store.listAllDeals(20000),rows=base?.rows||[];await this.enrichClosingDeals(dealStates,date);const report={id:`gerencial_close__${date}`,reportType:'gerencial_close',date,cutoff:17,generatedAt:new Date().toISOString(),metrics:metrics(rows),text:closeText({date,base,rows,dealStates})};await this.store.saveLiveDailyReport(report.id,report);return report}
   async closing({date,forceAi=true}){const base=await this.base(date,17,forceAi);return this.closingFromBase({base,date})}
 }
-module.exports={ManualSupervisionService,manualReportKey,rowCase,metrics,needsCorrection,severity,product,profile,checklist,liveText,superText,closeText,closeCrmPortfolio,closeStagePriority,technicalDealLabel};
+module.exports={ManualSupervisionService,manualReportKey,rowCase,metrics,needsCorrection,severity,product,profile,checklist,liveText,superText,closeText,closeCrmPortfolio,closeStagePriority,technicalDealLabel,evidenceSignature,displayStatus,visibleDailyRows};

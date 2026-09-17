@@ -113,23 +113,26 @@ function createApp({engine,dailyService,dailyV3LiveService,manualSupervisionServ
   async function runApprovedLiveAuto({now,send=true,setup}){
     const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);
     if(wd.liveAutoEnabled!==true)return{product:'live',skipped:true,reason:'LIVE_AUTO_DISABLED'};
-    if(!(wd.days||[]).includes(p.weekday)||p.minutes<hmMinutes(wd.startTime,'09:00')||p.minutes>=hmMinutes(wd.endTime,'17:00'))return{product:'live',skipped:true,reason:'LIVE_OUTSIDE_SCHEDULE'};
-    if(p.minutes>=hmMinutes(wd.pauseStart,'12:00')&&p.minutes<hmMinutes(wd.pauseEnd,'13:00'))return{product:'live',skipped:true,reason:'LIVE_PAUSE'};
-    const freq=Number(wd.sellerFrequencyMinutes||45),cp=await engine.store.getRemoteCheckpoint('approved_live_auto_last');
-    if(cp?.at&&now-new Date(cp.at)<freq*60000)return{product:'live',skipped:true,reason:'LIVE_FREQUENCY_NOT_DUE',lastAt:cp.at};
+    if(!(wd.days||[]).includes(p.weekday))return{product:'live',skipped:true,reason:'LIVE_OUTSIDE_WEEKDAY'};
+    const slots=(Array.isArray(wd.liveScheduleHours)?wd.liveScheduleHours:[9,11,12,14,15,16]).map(Number).filter(h=>Number.isInteger(h)&&h>=0&&h<=23).sort((a,b)=>a-b);
+    const cutoff=slots.find(h=>p.minutes>=h*60&&p.minutes<h*60+30);
+    if(cutoff===undefined)return{product:'live',skipped:true,reason:'LIVE_NOT_DUE',scheduleHours:slots};
+    const slotKey=`approved_live_slot__${p.date}__${cutoff}`,slotCp=await engine.store.getRemoteCheckpoint(slotKey);
+    if(slotCp?.processedAt)return{product:'live',skipped:true,reason:'LIVE_SLOT_ALREADY_PROCESSED',cutoff,processedAt:slotCp.processedAt};
     const groups=(setup.sellerGroups||[]).filter(g=>g.enabled!==false&&g.telegramChatId);
-    if(!groups.length)return{product:'live',skipped:true,reason:'LIVE_NO_CONFIGURED_GROUPS'};
-    const cutoff=Math.min(17,Math.max(10,p.hour+(p.minute>0?1:0)));
+    if(!groups.length){await engine.store.saveRemoteCheckpoint(slotKey,{processedAt:now.toISOString(),date:p.date,cutoff,groups:0});return{product:'live',skipped:true,reason:'LIVE_NO_CONFIGURED_GROUPS',cutoff}};
     // Same functional path as the manual mass test: seller-specific analysis/cache,
     // then the approved live formatter and Telegram destination for that seller.
     const results=await mapLimited(groups,3,async g=>{
       const {sellerKey,sellerLabel,base}=await manualLikeSellerBase({date:p.date,cutoff,group:g});
       const report=await manualSupervisionService.liveSellerFromBase({base,date:p.date,cutoff,sellerKey,sellerLabel});
+      const hasActivity=Number(report?.metrics?.visibleChats||0)>0||Number(report?.metrics?.clients||0)>0||Number(report?.metrics?.followUpsToCorrect||0)>0||Number(report?.metrics?.followUpsCorrect||0)>0||Number(report?.metrics?.activationToCorrect||0)>0||Number(report?.metrics?.grave||0)>0||Number(report?.metrics?.hyperGrave||0)>0;
+      if(!hasActivity)return{sellerKey,sellerLabel,reportId:report.id,skipped:true,reason:'LIVE_NO_ACTIVITY',sent:false};
       const sent=send?await telegram.send(report.text,g.telegramChatId):null;
-      return{sellerKey,sellerLabel,reportId:report.id,sent:!!sent}
+      return{sellerKey,sellerLabel,reportId:report.id,skipped:false,sent:!!sent}
     });
-    await engine.store.saveRemoteCheckpoint('approved_live_auto_last',{at:now.toISOString(),date:p.date,cutoff,results:results.map(x=>({sellerKey:x?.sellerKey||null,sent:x?.sent===true,error:x?.error||null}))});
-    return{product:'live',skipped:false,date:p.date,cutoff,groups:groups.length,execution:'MANUAL_LIKE',results}
+    await engine.store.saveRemoteCheckpoint(slotKey,{processedAt:now.toISOString(),date:p.date,cutoff,results:results.map(x=>({sellerKey:x?.sellerKey||null,skipped:x?.skipped===true,reason:x?.reason||null,sent:x?.sent===true,error:x?.error||null}))});
+    return{product:'live',skipped:false,date:p.date,cutoff,groups:groups.length,groupsWithActivity:results.filter(x=>x&&!x.error&&!x.skipped).length,execution:'MANUAL_LIKE',scheduleMode:'FIXED_SLOTS',results}
   }
   async function runApprovedSuperAuto({now,send=true,setup}){
     const wd=setup.settings?.weekday||{},p=localAutomationParts(now,setup.settings?.timezone);

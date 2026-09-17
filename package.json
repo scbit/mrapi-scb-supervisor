@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.13.25",
+  "version": "0.13.26",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - final manual supervision UI: live seller, super supervisor and gerencial close",
+  "description": "SUPERVISOR SCB V3 - stable live supervision snapshots, fixed report slots and evolution tracking",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
