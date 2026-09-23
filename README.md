@@ -366,7 +366,7 @@ Objetivo de costo:
 - El objetivo de costo se mantiene: seller cache existente se reutiliza; no se fuerza IA (`forceAi:false`).
 
 
-## v0.13.29 — LIVE STABILITY + SNAPSHOTS + FIXED SLOTS
+## v0.13.30 — LIVE STABILITY + SNAPSHOTS + FIXED SLOTS
 
 - Supervisor en Vivo automático: 09:00, 11:00, 12:00, 14:00, 15:00 y 16:00 (America/Argentina/Buenos_Aires).
 - No envía Telegram para vendedores/grupos sin actividad relevante en el corte.
@@ -376,3 +376,9 @@ Objetivo de costo:
 - Estado actual manda: un caso pendiente en un corte puede aparecer corregido en el siguiente, conservando la historia en snapshots.
 - Reutiliza `supervisor_v3_live_daily_reports`; no agrega infraestructura ni toca fuentes operativas READ ONLY.
 - SUPER SUPERVISOR continúa 10:00/14:00 y Cierre Gerencial 17:00.
+
+## v0.13.30 — CABA owner/date read parity with Hub
+- La lectura manual por vendedor/oficina copia el patrón de Hub v1.5.76: `ownerEmail` + `lastMessageAt >= inicio del día` + orden DESC.
+- Elimina el upper-bound de Firestore que podía requerir un índice distinto y caer silenciosamente al fallback global.
+- Si Firestore rechaza la consulta owner+fecha, usa un fallback acotado del día (hasta 2000 conversaciones recientes) y filtra el owner en memoria, evitando falsos `Chats del día: 0`.
+- No cambia IA, reglas comerciales, Telegram ni schedulers.

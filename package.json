@@ -1,6 +1,6 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.13.29",
+  "version": "0.13.30",
   "private": true,
   "description": "SUPERVISOR SCB V3 - Hub v1.5.76 logical conversation compatibility",
   "main": "src/index.js",

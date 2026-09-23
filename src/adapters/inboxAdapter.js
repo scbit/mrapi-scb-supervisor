@@ -84,25 +84,40 @@ class InboxAdapter{
   }
 
   async listConversationsInRange({from,to,limit=500,owner=null}){
-    const max=Math.max(1,Number(limit||500)),ownerKey=String(owner||'').trim().toLowerCase();let s;
-    // Hub v1.5.76 filters owners at source. Do the same here so a busy tenant
-    // cannot consume the global limit before the requested seller/office is seen.
+    const max=Math.max(1,Number(limit||500)),ownerKey=String(owner||'').trim().toLowerCase();
+    const inRangeOwner=c=>{const t=timeMs(c.lastMessageAt);return Number.isFinite(t)&&t>=timeMs(from)&&t<=timeMs(to)&&(!ownerKey||String(c.owner||'').trim().toLowerCase()===ownerKey)};
+
+    // Hub v1.5.76 uses ownerEmail + a lower lastMessageAt bound, ordered DESC.
+    // Mirror that query exactly. Avoid an upper-bound clause because the Hub does
+    // not use it and Firestore may require a different composite index for it.
     if(ownerKey){
       try{
-        s=await this.db.collection('conversations')
+        const s=await this.db.collection('conversations')
           .where('ownerEmail','==',ownerKey)
           .where('lastMessageAt','>=',from)
-          .where('lastMessageAt','<=',to)
-          .orderBy('lastMessageAt','asc')
+          .orderBy('lastMessageAt','desc')
           .limit(max).get();
-        return this._coalesceDocs(s.docs).filter(c=>String(c.owner||'').trim().toLowerCase()===ownerKey&&(()=>{const t=timeMs(c.lastMessageAt);return Number.isFinite(t)&&t>=timeMs(from)&&t<=timeMs(to)})());
-      }catch(_){
-        // Keep compatibility with legacy datasets/indexes below.
-      }
+        const rows=this._coalesceDocs(s.docs).filter(inRangeOwner);
+        if(rows.length)return rows;
+      }catch(_){/* fall through to bounded day fallback */}
+
+      // Fail-open for reporting only: read the day's recent conversations before
+      // filtering by owner. This prevents a missing composite index from turning
+      // an active office into a false zero-activity report.
+      try{
+        const fallbackMax=Math.max(max,2000);
+        const s=await this.db.collection('conversations')
+          .where('lastMessageAt','>=',from)
+          .orderBy('lastMessageAt','desc')
+          .limit(fallbackMax).get();
+        return this._coalesceDocs(s.docs).filter(inRangeOwner).slice(0,max);
+      }catch(_){/* legacy fallback below */}
     }
-    try{s=await this.db.collection('conversations').where('lastMessageAt','>=',from).where('lastMessageAt','<=',to).orderBy('lastMessageAt','asc').limit(max).get()}
-    catch(_){s=await this.db.collection('conversations').orderBy('lastMessageAt','asc').limit(max).get()}
-    return this._coalesceDocs(s.docs).filter(c=>{const t=timeMs(c.lastMessageAt);return Number.isFinite(t)&&t>=timeMs(from)&&t<=timeMs(to)&&(!ownerKey||String(c.owner||'').trim().toLowerCase()===ownerKey)})
+
+    let s;
+    try{s=await this.db.collection('conversations').where('lastMessageAt','>=',from).where('lastMessageAt','<=',to).orderBy('lastMessageAt','desc').limit(Math.max(max,ownerKey?2000:max)).get()}
+    catch(_){s=await this.db.collection('conversations').orderBy('lastMessageAt','desc').limit(Math.max(max,ownerKey?2000:max)).get()}
+    return this._coalesceDocs(s.docs).filter(inRangeOwner).slice(0,max)
   }
 
   async getConversation(id){return (await this._resolveGroup(id)).conversation}
