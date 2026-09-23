@@ -83,11 +83,26 @@ class InboxAdapter{
     return this._coalesceDocs(s.docs);
   }
 
-  async listConversationsInRange({from,to,limit=500}){
-    const max=Math.max(1,Number(limit||500));let s;
+  async listConversationsInRange({from,to,limit=500,owner=null}){
+    const max=Math.max(1,Number(limit||500)),ownerKey=String(owner||'').trim().toLowerCase();let s;
+    // Hub v1.5.76 filters owners at source. Do the same here so a busy tenant
+    // cannot consume the global limit before the requested seller/office is seen.
+    if(ownerKey){
+      try{
+        s=await this.db.collection('conversations')
+          .where('ownerEmail','==',ownerKey)
+          .where('lastMessageAt','>=',from)
+          .where('lastMessageAt','<=',to)
+          .orderBy('lastMessageAt','asc')
+          .limit(max).get();
+        return this._coalesceDocs(s.docs).filter(c=>String(c.owner||'').trim().toLowerCase()===ownerKey&&(()=>{const t=timeMs(c.lastMessageAt);return Number.isFinite(t)&&t>=timeMs(from)&&t<=timeMs(to)})());
+      }catch(_){
+        // Keep compatibility with legacy datasets/indexes below.
+      }
+    }
     try{s=await this.db.collection('conversations').where('lastMessageAt','>=',from).where('lastMessageAt','<=',to).orderBy('lastMessageAt','asc').limit(max).get()}
     catch(_){s=await this.db.collection('conversations').orderBy('lastMessageAt','asc').limit(max).get()}
-    return this._coalesceDocs(s.docs).filter(c=>{const t=timeMs(c.lastMessageAt);return Number.isFinite(t)&&t>=timeMs(from)&&t<=timeMs(to)})
+    return this._coalesceDocs(s.docs).filter(c=>{const t=timeMs(c.lastMessageAt);return Number.isFinite(t)&&t>=timeMs(from)&&t<=timeMs(to)&&(!ownerKey||String(c.owner||'').trim().toLowerCase()===ownerKey)})
   }
 
   async getConversation(id){return (await this._resolveGroup(id)).conversation}
