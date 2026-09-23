@@ -120,7 +120,7 @@ class LiveDailySupervisor{
         }catch(e){row.aiError=e.message}
       }
 
-      row.hubUrl=hubUrl(row.conversationId);
+      row.hubUrl=hubUrl(row.hubConversationId||row.conversationId);
       await this.store.saveLiveDailyCase(date,st.id,{sellerKey:norm(row.seller||row.owner),sourceFingerprint:fingerprint,row});
       changedCases.push(row);
     }

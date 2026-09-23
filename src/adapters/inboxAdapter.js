@@ -2,6 +2,7 @@ const {normalizeConversation,normalizeMessage}=require('../core/normalizers');
 
 function digits(v){return String(v||'').replace(/\D/g,'')}
 function uniq(xs){return [...new Set((xs||[]).filter(Boolean).map(String))]}
+function publicHubConversationId(ids=[],fallback=''){const rows=uniq(ids);const legacy=rows.find(x=>/^\+?\d+__\+?\d+$/.test(String(x).replace(/^whatsapp:/i,'')));return legacy||String(fallback||rows[0]||'')}
 function phoneVariants(v){const d=digits(v);return d?uniq([d,`+${d}`,`whatsapp:+${d}`,`whatsapp:${d}`]):[]}
 function parseConversationId(id){
   const raw=String(id||'').replace(/^whatsapp:/i,'').replace(/\+/g,'').trim();
@@ -32,6 +33,7 @@ class InboxAdapter{
       const merged={...latest};
       merged.id=latest.id;
       merged.relatedConversationIds=uniq(rows.flatMap(x=>[x.id,...(Array.isArray(x.data.relatedConversationIds)?x.data.relatedConversationIds:[]),...(Array.isArray(x.data.duplicateConversationIds)?x.data.duplicateConversationIds:[])]));
+      merged.hubConversationId=publicHubConversationId(merged.relatedConversationIds,latest.id);
       merged.contactIds=uniq(normalized.flatMap(x=>x.contactIds||[x.contactId]));
       merged.dealIds=uniq(normalized.flatMap(x=>x.dealIds||[x.dealId]));
       merged.contactId=merged.contactIds[0]||first(normalized,'contactId');
@@ -70,6 +72,7 @@ class InboxAdapter{
     const conversation=this._coalesceDocs([...docs.values()])[0]||normalizeConversation(base.id,seed);
     conversation.id=key; // keep public/source id stable for HUB links and stored cases
     conversation.relatedConversationIds=uniq([key,...docs.keys()]);
+    conversation.hubConversationId=publicHubConversationId(conversation.relatedConversationIds,key);
     const result={ids:conversation.relatedConversationIds,docs:[...docs.values()],conversation};
     for(const alias of result.ids)this.groupCache.set(String(alias),result);
     return result;
@@ -135,4 +138,4 @@ class InboxAdapter{
     return [...by.values()].sort((a,b)=>timeMs(a.timestamp)-timeMs(b.timestamp)).slice(-max);
   }
 }
-module.exports={InboxAdapter,customerOf,lineOf};
+module.exports={InboxAdapter,customerOf,lineOf,publicHubConversationId};

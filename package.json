@@ -1,6 +1,6 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.13.32",
+  "version": "0.13.33",
   "private": true,
   "description": "SUPERVISOR SCB V3 - fresh manual analysis and cache invalidation",
   "main": "src/index.js",

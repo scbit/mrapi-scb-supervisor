@@ -22,7 +22,7 @@ async hydrateDailyReport(id,data){
   const out={id,...data};
   if(!Array.isArray(out.rows)&&out.rowsStorage==='dailyItems'&&out.sourceJobId){
     const rowsAll=await this.listDailyItems(out.sourceJobId,1000);
-    out.rows=rowsAll.filter(r=>!r.excludedFromReport).map(r=>({...r,hubUrl:r.hubUrl||`https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(r.conversationId||'')}`}));
+    out.rows=rowsAll.filter(r=>!r.excludedFromReport).map(r=>({...r,hubUrl:r.hubUrl||`https://hub.sentirecustomsbroker.com/inbox?conversationId=${encodeURIComponent(r.hubConversationId||r.conversationId||'')}`}));
   }
   return out
 }

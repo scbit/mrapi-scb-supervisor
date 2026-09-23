@@ -1,4 +1,5 @@
 const {LiveDailySupervisor}=require('./liveDailySupervisor');
+const {hubUrl}=require('./dailyGerencial');
 const crypto=require('crypto');
 
 const ACTION_TYPES=['RESPOND','FOLLOW_UP','DISCOVERY','ADVISE','EXPLAIN_OPTIONS','DO_NOT_DISMISS','IMPROVE_RESPONSE','TRY_TO_CLOSE'];
@@ -150,7 +151,7 @@ class RemoteSupervisorService{
       }
     }
     const lines=['🌙 GUARDIA FIN DE SEMANA',`Revisión ${freq/60>=1?`cada ${freq/60} h`:`${freq} min`} · 09:00 a 24:00`,'',`Nuevos leads últimas ${freq/60}h: ${newRecent.length}`,`Meta Ads: ${adsRecent.length}`,`Sin vendedor asignado: ${unassignedRecent.length}`,`Nuevos leads desde las 09:00: ${newSinceNine.length}`];
-    if(alerts.length){lines.push('','🚨 ALERTAS IMPORTANTES');for(const x of alerts.slice(0,10)){const c=x.conversation,e=x.evaluation;lines.push(`${String(e.signal||'ALERTA').replaceAll('_',' ')} — ${c.contactName||'Cliente sin nombre'}${!c.owner&&!c.dealId?' · SIN ASIGNAR':''}`,e.summary||e.reason||'Oportunidad relevante',`https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`,'')}}
+    if(alerts.length){lines.push('','🚨 ALERTAS IMPORTANTES');for(const x of alerts.slice(0,10)){const c=x.conversation,e=x.evaluation;lines.push(`${String(e.signal||'ALERTA').replaceAll('_',' ')} — ${c.contactName||'Cliente sin nombre'}${!c.owner&&!c.dealId?' · SIN ASIGNAR':''}`,e.summary||e.reason||'Oportunidad relevante',hubUrl(c.hubConversationId||c.id),'')}}
     else lines.push('','✅ Sin urgencias ni oportunidades excepcionales en esta revisión.');
     return{id:id('weekend_global'),mode:'weekend_guard',generatedAt:now.toISOString(),summary:{newRecent:newRecent.length,adsRecent:adsRecent.length,unassignedRecent:unassignedRecent.length,newSinceNine:newSinceNine.length,alerts:alerts.length},text:lines.join('\n')};
   }
@@ -273,9 +274,9 @@ class RemoteSupervisorService{
     const lines=[`SUPERVISOR REMOTO — ${cfg.name}`,`Horario ${cfg.startTime}-${cfg.endTime} · frecuencia ${cfg.frequencyMinutes} min`,'','👥 VENDEDORES'];
     for(const s of [...sellers.values()].sort((a,b)=>a.name.localeCompare(b.name)))lines.push(`${s.active?'🟢':'⚪'} ${s.name} — esperando ${s.waiting}`);
     lines.push('','🚨 CLIENTES ESPERANDO');if(!waiting.length)lines.push('Sin clientes esperando.');else waiting.slice(0,12).forEach(c=>lines.push(`• ${c.snapshot?.contactName||c.snapshot?.name||c.metrics?.contactName||c.id} — ${configuredSellerLabel||c.metrics?.owner||c.snapshot?.owner||'Sin asignar'}
-https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`));
-    lines.push('','🎯 CORRECCIONES PENDIENTES');if(!open.length)lines.push('Sin correcciones pendientes.');else open.slice(0,12).forEach(a=>lines.push(`🟠 ${configuredSellerLabel||a.seller} — ${a.actionType}${a.severity?` · ${a.severity}`:''}\nProblema: ${a.reason||'-'}\nEsperado: ${a.expectedBehavior||'-'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`));
-    if(failedRecent.length){lines.push('','❌ CORRECCIONES NO APLICADAS');failedRecent.slice(0,10).forEach(a=>lines.push(`• ${configuredSellerLabel||a.seller} — ${a.actionType}\n${a.verificationResult?.reason||'La siguiente acción no cumplió la corrección.'}\nhttps://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(a.conversationId)}`))}
+https://hub.sentirecustomsbroker.com/inbox?conversationId=${encodeURIComponent(c.metrics?.hubConversationId||c.snapshot?.hubConversationId||c.id)}`));
+    lines.push('','🎯 CORRECCIONES PENDIENTES');if(!open.length)lines.push('Sin correcciones pendientes.');else open.slice(0,12).forEach(a=>lines.push(`🟠 ${configuredSellerLabel||a.seller} — ${a.actionType}${a.severity?` · ${a.severity}`:''}\nProblema: ${a.reason||'-'}\nEsperado: ${a.expectedBehavior||'-'}\nhttps://hub.sentirecustomsbroker.com/inbox?conversationId=${encodeURIComponent(a.hubConversationId||a.conversationId)}`));
+    if(failedRecent.length){lines.push('','❌ CORRECCIONES NO APLICADAS');failedRecent.slice(0,10).forEach(a=>lines.push(`• ${configuredSellerLabel||a.seller} — ${a.actionType}\n${a.verificationResult?.reason||'La siguiente acción no cumplió la corrección.'}\nhttps://hub.sentirecustomsbroker.com/inbox?conversationId=${encodeURIComponent(a.hubConversationId||a.conversationId)}`))}
     if(recent.length){lines.push('','✅ CORRECCIONES APLICADAS');recent.slice(0,10).forEach(a=>lines.push(`• ${configuredSellerLabel||a.seller} — ${a.actionType}${a.verificationResult?.reason?` — ${a.verificationResult.reason}`:''}`))}
     const report={id:id('remote_report'),supervisorId:cfg.id,mode:'weekday',generatedAt:now.toISOString(),configSnapshot:cfg,summary:{sellerCount:sellers.size,waiting:waiting.length,pendingCorrections:open.length,failedRecent:failedRecent.length,verifiedRecent:recent.length},text:lines.join('\n')};await this.store.saveRemoteReport(report.id,report);return report;
   }
@@ -293,7 +294,7 @@ https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}
     }
     if(!candidates.length)return null;
     const lines=['🚨 GUARDIA FIN DE SEMANA — SUPERVISOR SCB',`Revisión de las últimas ${freq} min · solo alertas importantes`,''];
-    for(const x of candidates.slice(0,10)){const c=x.conversation,e=x.evaluation;lines.push(`${String(e.signal||'ALERTA').replaceAll('_',' ')} — ${c.contactName||'Cliente sin nombre'}${x.unassigned?' · SIN ASIGNAR':''}${x.isAd?' · META ADS':''}`,e.summary||e.reason||'Señal comercial relevante',`https://hub.sentirecustomsbroker.com/?conversationId=${encodeURIComponent(c.id)}`,'')}
+    for(const x of candidates.slice(0,10)){const c=x.conversation,e=x.evaluation;lines.push(`${String(e.signal||'ALERTA').replaceAll('_',' ')} — ${c.contactName||'Cliente sin nombre'}${x.unassigned?' · SIN ASIGNAR':''}${x.isAd?' · META ADS':''}`,e.summary||e.reason||'Señal comercial relevante',hubUrl(c.hubConversationId||c.id),'')}
     return{id:id('weekend_guard'),supervisorId:cfg.id,mode:'weekend_guard',generatedAt:now.toISOString(),summary:{alerts:candidates.length},text:lines.join('\n')};
   }
   async runSupervisor(supervisorId,{now=new Date(),send=true,force=false,activeDeals=null}={}){

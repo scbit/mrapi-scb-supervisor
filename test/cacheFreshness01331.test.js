@@ -6,7 +6,7 @@ test('0.13.31 manual UI forces fresh analysis instead of stale Daily cache',()=>
   const ui=fs.readFileSync('public/index.html','utf8');
   assert.match(ui,/date:body\.date,cutoff:body\.cutoff,refresh:true,sellerKey:body\.sellerKey\|\|null/);
   assert.match(ui,/date,cutoff,refresh:true,sellerKey/);
-  assert.match(ui,/v0\.13\.32/);
+  assert.match(ui,/v0\.13\.33/);
 });
 
 test('0.13.31 refresh bypasses per-conversation AI cache',()=>{

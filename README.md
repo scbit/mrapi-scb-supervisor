@@ -384,6 +384,12 @@ Objetivo de costo:
 - No cambia IA, reglas comerciales, Telegram ni schedulers.
 
 
+## v0.13.33 — HUB INBOX LINK COMPATIBILITY
+
+- HUB links now use `/inbox?conversationId=`.
+- Internal `wa_...` IDs remain for aggregation, while public links prefer the legacy customer__line conversation ID recognized by HUB.
+- v0.13.32 behavior remains included.
+
 ## v0.13.32 — CURRENT-STATE CACHE INVALIDATION
 
 - Manual `Generar prueba` and manual massive test now force a fresh Daily V3 rebuild instead of reusing a stale seller/cutoff report.

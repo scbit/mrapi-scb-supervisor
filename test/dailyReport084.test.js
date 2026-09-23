@@ -18,7 +18,7 @@ test('seller response rate counts responded client conversations only',()=>{
 });
 
 test('HUB link uses production conversation formula and encodes id',()=>{
-  assert.equal(hubUrl('54911+__x y'),'https://hub.sentirecustomsbroker.com/?conversationId=54911%2B__x%20y');
+  assert.equal(hubUrl('54911+__x y'),'https://hub.sentirecustomsbroker.com/inbox?conversationId=54911%2B__x%20y');
 });
 
 test('daily email is structured and exposes direct HUB action for relevant cases',()=>{
@@ -33,7 +33,7 @@ test('daily email is structured and exposes direct HUB action for relevant cases
   assert.match(out,/Calidad comercial IA/);
   assert.match(out,/Casos importantes/);
   assert.match(out,/Ver conversación/);
-  assert.match(out,/https:\/\/hub\.sentirecustomsbroker\.com\/\?conversationId=c__1/);
+  assert.match(out,/https:\/\/hub\.sentirecustomsbroker\.com\/inbox\?conversationId=c__1/);
   assert.match(out,/50%|100%/);
 });
 
@@ -45,5 +45,5 @@ test('daily text distinguishes client response from human message activity',()=>
   const out=managerText(report);
   assert.match(out,/Clientes respondidos por humano: 1 \(100%\)/);
   assert.match(out,/Mensajes humanos detectados: 3/);
-  assert.match(out,/HUB: https:\/\/hub\.sentirecustomsbroker\.com\/\?conversationId=c1/);
+  assert.match(out,/HUB: https:\/\/hub\.sentirecustomsbroker\.com\/inbox\?conversationId=c1/);
 });

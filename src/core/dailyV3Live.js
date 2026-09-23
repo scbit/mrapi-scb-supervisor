@@ -39,7 +39,7 @@ function filteredLeadQuality(lq,sellerKey){
 }
 
 function buildSellerReport(base,sellerKey,label=null){
-  const rows=(base.rows||[]).filter(x=>sellerMatches(x,sellerKey)).map(x=>({...x,hubUrl:x.hubUrl||hubUrl(x.conversationId)}));
+  const rows=(base.rows||[]).filter(x=>sellerMatches(x,sellerKey)).map(x=>({...x,hubUrl:x.hubUrl||hubUrl(x.hubConversationId||x.conversationId)}));
   const bySeller=summary(rows);
   const report={
     ...base,
@@ -117,7 +117,7 @@ class DailyV3LiveService{
     const observations=await this.store.listLiveDailyObservationsForSellers([norm(sellerKey)],2000);
     const corrections=observations
       .filter(o=>o.issueType==='COMMERCIAL_CHAT_CASE'&&(!o.sourceDate||String(o.sourceDate)===String(date)))
-      .map(o=>({conversationId:o.conversationId,status:o.status||'PENDING',quality:o.quality||null,reason:o.reason||'',expected:o.expected||'',hubUrl:o.hubUrl||hubUrl(o.conversationId),lastSeenAt:o.lastSeenAt||null,correctedAt:o.correctedAt||null,notCorrectedAt:o.notCorrectedAt||null}));
+      .map(o=>({conversationId:o.conversationId,status:o.status||'PENDING',quality:o.quality||null,reason:o.reason||'',expected:o.expected||'',hubUrl:o.hubUrl||hubUrl(o.hubConversationId||o.conversationId),lastSeenAt:o.lastSeenAt||null,correctedAt:o.correctedAt||null,notCorrectedAt:o.notCorrectedAt||null}));
     report.corrections=corrections;
     report.correctionSummary={
       pending:corrections.filter(x=>x.status==='PENDING').length,
