@@ -384,7 +384,7 @@ Objetivo de costo:
 - No cambia IA, reglas comerciales, Telegram ni schedulers.
 
 
-## v0.13.31 — CURRENT-STATE CACHE INVALIDATION
+## v0.13.32 — CURRENT-STATE CACHE INVALIDATION
 
 - Manual `Generar prueba` and manual massive test now force a fresh Daily V3 rebuild instead of reusing a stale seller/cutoff report.
 - Manual refresh also bypasses per-conversation AI review cache, so changed messages are re-evaluated.

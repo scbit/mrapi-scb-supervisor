@@ -3,7 +3,7 @@ const {daysOverdue}=require('./time');
 const crypto=require('crypto');
 
 function norm(v){return String(v||'').trim().toLowerCase()}
-function sellerMatch(r,key){return norm(r?.seller||r?.owner)===norm(key)}
+function sellerMatch(r,key){const k=norm(key);return [r?.seller,r?.owner,r?.scopeOwner,r?.assignedOwner].some(v=>norm(v)===k)}
 function pct(n,d){return d?Math.round(n/d*100):0}
 function product(row){
   const ai=row.ai||{},n=String(ai.product_name||'').trim();

@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: Oficina CABA keeps rows when human seller differs from conversation owner
+ok 1 - Oficina CABA keeps rows when human seller differs from conversation owner
+  ---
+  duration_ms: 3.110781
+  type: 'test'
+  ...
+# Subtest: 0.13.25 live auto uses seller-specific manual-like bases
+ok 2 - 0.13.25 live auto uses seller-specific manual-like bases
+  ---
+  duration_ms: 0.773514
+  type: 'test'
+  ...
+# Subtest: 0.13.25 automatic seller work is concurrency bounded
+ok 3 - 0.13.25 automatic seller work is concurrency bounded
+  ---
+  duration_ms: 0.294015
+  type: 'test'
+  ...
+# Subtest: 0.13.25 SUPER and close can render from seller-combined cached base
+ok 4 - 0.13.25 SUPER and close can render from seller-combined cached base
+  ---
+  duration_ms: 0.926781
+  type: 'test'
+  ...
+# Subtest: 0.13.25 keeps automatic AI non-forced and schedulers split
+ok 5 - 0.13.25 keeps automatic AI non-forced and schedulers split
+  ---
+  duration_ms: 0.241567
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 55.499637
