@@ -200,7 +200,7 @@ function closeText({date,base,rows,dealStates=[]}){
 }
 
 
-function manualReportKey(date,cutoff=17,sellerKey=null){const seller=sellerKey?`__seller_${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`:'';return `${date}__cutoff_${Number(cutoff)}__guide_v1_product_context_v1${seller}`}
+function manualReportKey(date,cutoff=17,sellerKey=null){const seller=sellerKey?`__seller_${Buffer.from(norm(sellerKey)).toString('base64url').slice(0,80)}`:'';return `${date}__cutoff_${Number(cutoff)}__guide_v1_product_context_v2_fresh${seller}`}
 class ManualSupervisionService{
   constructor({dailyService,store}){this.dailyService=dailyService;this.store=store;this.crm=dailyService?.crm||null}
   async enrichClosingDeals(dealStates,date){
@@ -233,7 +233,7 @@ class ManualSupervisionService{
       const cached=await this.store.getDailyReport(reportKey);
       if(cached&&Array.isArray(cached.rows))return cached;
     }
-    return this.dailyService.generate({date,endHour:Number(cutoff),forceAi,reportKey,reviewScope:'guide_v1_product_context_v1',sellerKey})
+    return this.dailyService.generate({date,endHour:Number(cutoff),forceAi,reportKey,reviewScope:'guide_v1_product_context_v2_fresh',sellerKey})
   }
   async liveSellerFromBase({base,date,cutoff=17,sellerKey,sellerLabel}){
     const rawRows=(base?.rows||[]).filter(r=>sellerMatch(r,sellerKey)),allReports=await this.store.listLiveDailyReports(1000);

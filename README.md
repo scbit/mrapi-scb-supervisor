@@ -382,3 +382,12 @@ Objetivo de costo:
 - Elimina el upper-bound de Firestore que podía requerir un índice distinto y caer silenciosamente al fallback global.
 - Si Firestore rechaza la consulta owner+fecha, usa un fallback acotado del día (hasta 2000 conversaciones recientes) y filtra el owner en memoria, evitando falsos `Chats del día: 0`.
 - No cambia IA, reglas comerciales, Telegram ni schedulers.
+
+
+## v0.13.31 — CURRENT-STATE CACHE INVALIDATION
+
+- Manual `Generar prueba` and manual massive test now force a fresh Daily V3 rebuild instead of reusing a stale seller/cutoff report.
+- Manual refresh also bypasses per-conversation AI review cache, so changed messages are re-evaluated.
+- Automatic/manual base cache namespace was bumped to `guide_v1_product_context_v2_fresh`, invalidating stale v1 reports/reviews created before the Hub compatibility fixes.
+- Historical snapshots are preserved; only current-state generation stops trusting the obsolete cache namespace.
+- No scheduler, Telegram destination, CRM write, Hub write, or infrastructure changes.

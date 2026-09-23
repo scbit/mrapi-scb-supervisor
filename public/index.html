@@ -11,7 +11,7 @@
   </div>
   <div id="authStatus" class="authStatus">Esperando autenticación.</div>
 </div>
-<div class="statusbar"><div class="stat"><div class="k">Supervisor</div><div class="v" id="stHealth">—</div></div><div class="stat"><div class="k">Scheduler</div><div class="v" id="stScheduler">NO CONECTADO</div></div><div class="stat"><div class="k">Modo Telegram</div><div class="v" id="stMode">DRY_RUN</div></div><div class="stat"><div class="k">Versión</div><div class="v">v0.13.30</div></div></div>
+<div class="statusbar"><div class="stat"><div class="k">Supervisor</div><div class="v" id="stHealth">—</div></div><div class="stat"><div class="k">Scheduler</div><div class="v" id="stScheduler">NO CONECTADO</div></div><div class="stat"><div class="k">Modo Telegram</div><div class="v" id="stMode">DRY_RUN</div></div><div class="stat"><div class="k">Versión</div><div class="v">v0.13.31</div></div></div>
 <section class="card span12" style="margin-bottom:16px">
 <h2>Control de automatización</h2>
 <div class="sub">Cada producto se activa o desactiva por separado. Los botones manuales siguen funcionando aunque su automático esté apagado.</div>
@@ -236,7 +236,7 @@ function selLabel(){return seller.options[seller.selectedIndex]?.textContent||se
 async function postRun(url,body,out){
   out.textContent='Preparando análisis…';
   try{
-    const start=await req('/api/supervisor/manual/start',{method:'POST',headers:H(true),body:JSON.stringify({date:body.date,cutoff:body.cutoff,refresh:false,sellerKey:body.sellerKey||null})});
+    const start=await req('/api/supervisor/manual/start',{method:'POST',headers:H(true),body:JSON.stringify({date:body.date,cutoff:body.cutoff,refresh:true,sellerKey:body.sellerKey||null})});
     if(!start.cached){
       let job={jobId:start.jobId,total:start.total,processed:0,status:'queued'},guard=0;
       while(job.status!=='complete'){
@@ -257,7 +257,7 @@ function runSuper(send){postRun('/api/supervisor/manual/super',{date:superDate.v
 function runClose(send){postRun('/api/supervisor/manual/close',{date:closeDate.value,cutoff:17,send},closeOut)}
 
 async function ensureManualAnalysis(date,cutoff,sellerKey){
-  const start=await req('/api/supervisor/manual/start',{method:'POST',headers:H(true),body:JSON.stringify({date,cutoff,refresh:false,sellerKey})});
+  const start=await req('/api/supervisor/manual/start',{method:'POST',headers:H(true),body:JSON.stringify({date,cutoff,refresh:true,sellerKey})});
   if(start.cached)return;
   let job={jobId:start.jobId,total:start.total,processed:0,status:'queued'},guard=0;
   while(job.status!=='complete'){
