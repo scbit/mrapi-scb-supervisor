@@ -7,16 +7,18 @@ function nullableNumber(v){if(v===undefined||v===null||v==='')return null;const 
 function normalizeConversation(id,d={}){return{
   id,
   contactId:text(d,['contactId','contact_id'])||null,
+  contactIds:Array.isArray(d.contactIds)?d.contactIds.filter(Boolean).map(String):[],
   contactName:text(d,['contactName','name','customerName','clientName'])||null,
   dealId:text(d,['dealId','crmDealId','deal_id'])||null,
-  phone:text(d,['phone','customerPhone','clientPhone','whatsapp','waFrom'])||null,
+  dealIds:Array.isArray(d.dealIds)?d.dealIds.filter(Boolean).map(String):[],
+  phone:text(d,['phone','customerPhone','clientPhone','whatsapp','waFrom','from','contactPhone'])||null,
   stage:text(d,['stage','status'])||null,
   lastMessagePreview:text(d,['lastMessagePreview','lastMessage','lastText'])||null,
   lastMessageAt:toIso(d.lastMessageAt||d.updatedAt||d.createdAt),
   sourceUpdatedAt:toIso(d.updatedAt||d.lastMessageAt||d.createdAt),
   createdAt:toIso(d.createdAt),
-  lastInboundAt:toIso(d.lastInboundAt),
-  lastCustomerMessageAt:toIso(d.lastCustomerMessageAt||d.lastClientMessageAt||d.lastIncomingAt||d.lastReceivedAt),
+  lastInboundAt:toIso(d.lastInboundMessageAt||d.lastInboundAt),
+  lastCustomerMessageAt:toIso(d.lastInboundMessageAt||d.lastCustomerMessageAt||d.lastClientMessageAt||d.lastIncomingAt||d.lastReceivedAt),
   lastOutboundAt:toIso(d.lastOutboundAt),
   lastHumanMessageAt:toIso(d.lastHumanMessageAt||d.lastAgentMessageAt||d.lastUserMessageAt||d.lastReplyAt),
   lastMessageDirection:text(d,['lastMessageDirection','lastDirection','lastMsgDirection'])||null,
@@ -28,10 +30,10 @@ function normalizeConversation(id,d={}){return{
   adTitle:text(d,['referralHeadline','adTitle'])||null,
   adText:text(d,['referralBody','adText'])||null,
   adId:text(d,['referralAdId','adId','ad_id'])||null,
-  adLine:text(d,['requestedLineId','adLine','lineId'])||null,
+  adLine:text(d,['requestedLineId','adLine','lineId','inboundTo','preferredLineId'])||null,
   owner:text(d,['owner','ownerEmail','assignedTo','seller','vendedor'])||null
 }}
-function normalizeMessage(id,d={}){const rd=d.direction||d.dir||d.type||null;return{id,direction:normalizeDirection(rd),actor:detectMessageActor(d),user:text(d,['user','userEmail','owner','agent','sentBy','profileName','createdBy','author'])||null,text:text(d,['text','body','message','content','caption']),timestamp:toIso(d.timestamp||d.createdAt||d.date||d.sentAt)}}
+function normalizeMessage(id,d={}){const rd=d.direction||d.dir||d.type||null;return{id,messageSid:text(d,['messageSid','sid'])||null,source:text(d,['source'])||null,direction:normalizeDirection(rd),actor:detectMessageActor(d),user:text(d,['user','userEmail','owner','agent','sentByName','sentByEmail','sentBy','profileName','createdBy','author'])||null,text:text(d,['text','body','message','content','caption']),timestamp:toIso(d.timestamp||d.createdAt||d.date||d.sentAt)}}
 function normalizeLeadQuality(v){const x=String(v||'NO_RESPONDE').trim().toUpperCase().replace(/\s+/g,'_');if(['DESCARTADO','NO_RESPONDE','REGULAR','BUENO','EXCELENTE'].includes(x))return x;if(x==='NO_RESPUESTA')return'NO_RESPONDE';return'NO_RESPONDE'}
 function normalizeDeal(id,d={}){const stage=text(d,['stage','status','estado','pipelineStage']);const stageNorm=normalizeStage(stage);const closed=['PERDIDO','DESCARTADO','CLOSED','WON','LOST','CERRADO','GANADO','GANADO COURIER','GANADO MARITIMO','GANADO MARÍTIMO'];return{id,title:text(d,['title','name','dealName','nombre'])||id,contactId:text(d,['contactId','contact_id'])||null,conversationId:text(d,['conversationId','waConversationId','chatId','whatsappConversationId'])||null,owner:text(d,['owner','ownerEmail','assignedTo','seller','vendedor','responsible'])||null,stage,stageNorm,leadQuality:normalizeLeadQuality(d.leadQuality||'NO_RESPONDE'),dueDate:toIso(d.dueDate||d.nextDueDate||d.fechaVencimiento||d.vencimiento||d.nextFollowUpAt||d.followUpDate),updatedAt:toIso(d.updatedAt||d.lastActivityAt||d.createdAt),createdAt:toIso(d.createdAt),lastContactAt:toIso(d.lastContactAt||d.lastContact||d.contactedAt),lastRecontactAt:toIso(d.lastRecontactAt||d.recontactedAt||d.lastFollowUpAt),isClosed:d.isClosed===true||d.closed===true||closed.includes(stageNorm)||stageNorm.startsWith('GANADO ')}}
 module.exports={normalizeStage,normalizeDirection,normalizeConversation,normalizeMessage,normalizeDeal,normalizeLeadQuality,detectMessageActor};

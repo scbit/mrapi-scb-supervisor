@@ -366,7 +366,7 @@ Objetivo de costo:
 - El objetivo de costo se mantiene: seller cache existente se reutiliza; no se fuerza IA (`forceAi:false`).
 
 
-## v0.13.26 — LIVE STABILITY + SNAPSHOTS + FIXED SLOTS
+## v0.13.28 — LIVE STABILITY + SNAPSHOTS + FIXED SLOTS
 
 - Supervisor en Vivo automático: 09:00, 11:00, 12:00, 14:00, 15:00 y 16:00 (America/Argentina/Buenos_Aires).
 - No envía Telegram para vendedores/grupos sin actividad relevante en el corte.
