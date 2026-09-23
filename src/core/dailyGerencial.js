@@ -1,4 +1,5 @@
 const {aggregatePortfolio,aggregateFollowUps,humanDuration,cleanSellerLabel}=require('./report');
+const crypto=require('crypto');
 
 function norm(v){return String(v||'').trim().toLowerCase()}
 function localDayRange(date,startHour=9,endHour=17){
@@ -11,6 +12,27 @@ function mins(a,b){const x=new Date(a||0).getTime(),y=new Date(b||0).getTime();i
 function actor(m){return m?.actor||'unknown'}
 function sellerName(c,messages){const human=[...(messages||[])].reverse().find(m=>actor(m)==='human'&&m.user);return human?.user||c.owner||''}
 function textForReport(m){const t=String(m?.text||'').replace(/\s+/g,' ').trim();return t||''}
+function stableAiFingerprint(conversation={},messages=[]){
+  const materialConversation={
+    id:String(conversation.id||''),
+    dealId:String(conversation.dealId||''),
+    contactName:String(conversation.contactName||''),
+    owner:String(conversation.owner||conversation.ownerEmail||''),
+    stage:String(conversation.stage||''),
+    sourceChannel:String(conversation.sourceChannel||''),
+    sourceOrigin:String(conversation.sourceOrigin||''),
+    adId:String(conversation.adId||''),
+    adTitle:String(conversation.adTitle||'')
+  };
+  const materialMessages=(messages||[]).map((m,i)=>({
+    id:String(m.id||m.messageSid||`idx_${i}`),
+    timestamp:String(m.timestamp||''),
+    actor:String(actor(m)||''),
+    user:String(m.user||''),
+    text:textForReport(m)
+  })).sort((a,b)=>String(a.timestamp).localeCompare(String(b.timestamp))||String(a.id).localeCompare(String(b.id)));
+  return crypto.createHash('sha256').update(JSON.stringify({conversation:materialConversation,messages:materialMessages})).digest('hex');
+}
 function hubUrl(conversationId,base=process.env.HUB_BASE_URL||'https://hub.sentirecustomsbroker.com'){const root=String(base||'').trim().replace(/\/+$/,'');return conversationId&&root?`${root}/inbox?conversationId=${encodeURIComponent(conversationId)}`:''}
 
 const LEAD_QUALITY_ORDER=['EXCELENTE','BUENO','REGULAR','NO_RESPONDE','DESCARTADO'];
@@ -219,7 +241,24 @@ function html(report){
 class DailyGerencialService{
   constructor({config,inbox,crm,hunter,store,openai}){this.config=config;this.inbox=inbox;this.crm=crm;this.hunter=hunter;this.store=store;this.openai=openai}
   async start({date,startHour=9,endHour=17,lateMinutes=30,limit=500,forceAi=false,reportKey=null,reviewScope='guide_v1',sellerKey=null}={}){const range=localDayRange(date,startHour,endHour);const sellerNorm=String(sellerKey||'').trim().toLowerCase();let conversations=await this.inbox.listConversationsInRange({from:range.fullFrom,to:range.fullTo,limit,owner:sellerNorm||null});if(sellerNorm)conversations=conversations.filter(c=>String(c.owner||'').trim().toLowerCase()===sellerNorm);const jobId=`daily__${date}__${endHour}__${Date.now()}`;await this.store.saveDailyJob(jobId,{jobId,date,startHour,endHour,lateMinutes,limit,forceAi:forceAi===true,reportKey:reportKey||date,reviewScope,sellerKey:sellerNorm||null,status:'queued',conversationIds:conversations.map(c=>c.id),total:conversations.length,processed:0,aiUsedCount:0,aiErrors:[],createdAt:new Date().toISOString()});return{jobId,total:conversations.length,status:'queued',sellerKey:sellerNorm||null}}
-  async process({jobId,batchSize=5}={}){const job=await this.store.getDailyJob(jobId);if(!job)throw new Error('DAILY_JOB_NOT_FOUND');if(job.status==='complete')return{job,report:await this.store.getDailyReport(job.reportKey||job.date)};const ids=job.conversationIds||[],from=job.processed||0,to=Math.min(ids.length,from+Math.max(1,Number(batchSize||5))),range=localDayRange(job.date,job.startHour,job.endHour);let aiUsed=job.aiUsedCount||0;const aiErrors=[...(job.aiErrors||[])];for(const id of ids.slice(from,to)){const c=await this.inbox.getConversation(id);if(!c)continue;const messages=await this.inbox.getMessages(id,150);const messagesToCutoff=messages.filter(m=>!m.timestamp||new Date(m.timestamp)<=range.to);let row=analyzeConversation(c,messagesToCutoff,range,job.lateMinutes);if(!row.messagesInWindow)continue;row.scopeOwner=row.owner||c.owner||'';const human=[...messagesToCutoff].reverse().find(m=>actor(m)==='human'&&m.user);if(human?.user)row.seller=human.user;else if(!row.seller&&c.dealId){const d=await this.crm.getDeal(c.dealId).catch(()=>null);if(d?.owner)row.seller=d.owner}const ex=exclusionReason(c,row,messagesToCutoff);if(ex){await this.store.saveDailyItem(jobId,id,{...row,excludedFromReport:true,exclusionReason:ex});continue}if(needsAi(row)&&this.openai?.isConfigured()){try{const cacheKey=`${job.date}__${job.endHour}__${job.reviewScope||'guide_v1'}`;let ai=job.forceAi?null:await this.store.getDailyReview(cacheKey,id);if(!ai){ai=await this.openai.analyzeConversation(c,messagesToCutoff);await this.store.saveDailyReview(cacheKey,id,ai)}row=applyAi(row,ai);aiUsed++}catch(e){aiErrors.push({conversationId:id,error:e.message})}}await this.store.saveDailyItem(jobId,id,row)}const processed=to,statusDone=processed>=ids.length;await this.store.saveDailyJob(jobId,{processed,aiUsedCount:aiUsed,aiErrors,status:statusDone?'finalizing':'processing',updatedAt:new Date().toISOString()});if(statusDone){const report=await this.finalize(jobId);return{job:await this.store.getDailyJob(jobId),report}}return{job:{...job,processed,aiUsedCount:aiUsed,status:'processing'},report:null}}
+  async process({jobId,batchSize=5}={}){const job=await this.store.getDailyJob(jobId);if(!job)throw new Error('DAILY_JOB_NOT_FOUND');if(job.status==='complete')return{job,report:await this.store.getDailyReport(job.reportKey||job.date)};const ids=job.conversationIds||[],from=job.processed||0,to=Math.min(ids.length,from+Math.max(1,Number(batchSize||5))),range=localDayRange(job.date,job.startHour,job.endHour);let aiUsed=job.aiUsedCount||0;const aiErrors=[...(job.aiErrors||[])];for(const id of ids.slice(from,to)){const c=await this.inbox.getConversation(id);if(!c)continue;const messages=await this.inbox.getMessages(id,150);const messagesToCutoff=messages.filter(m=>!m.timestamp||new Date(m.timestamp)<=range.to);let row=analyzeConversation(c,messagesToCutoff,range,job.lateMinutes);if(!row.messagesInWindow)continue;row.scopeOwner=row.owner||c.owner||'';const human=[...messagesToCutoff].reverse().find(m=>actor(m)==='human'&&m.user);if(human?.user)row.seller=human.user;else if(!row.seller&&c.dealId){const d=await this.crm.getDeal(c.dealId).catch(()=>null);if(d?.owner)row.seller=d.owner}const ex=exclusionReason(c,row,messagesToCutoff);if(ex){await this.store.saveDailyItem(jobId,id,{...row,excludedFromReport:true,exclusionReason:ex});continue}if(needsAi(row)&&this.openai?.isConfigured()){try{
+        const fingerprint=stableAiFingerprint(c,messagesToCutoff);
+        const reviewScope=job.reviewScope||'guide_v1';
+        // AI memory is conversation/evidence based, not date/cutoff based.
+        // `forceAi` refreshes source/report generation but MUST NOT make the model
+        // re-opine on identical evidence. Time/late/overdue status is recomputed
+        // deterministically by analyzeConversation on every run.
+        let cached=await this.store.getStableDailyReview(reviewScope,id);
+        let ai=cached?.fingerprint===fingerprint?cached.ai:null;
+        if(!ai){
+          ai=await this.openai.analyzeConversation(c,messagesToCutoff);
+          await this.store.saveStableDailyReview(reviewScope,id,{fingerprint,ai,sourceDate:job.date,sourceCutoff:job.endHour,messageCount:messagesToCutoff.length});
+          aiUsed++;
+        }
+        row.aiFingerprint=fingerprint;
+        row.aiReused=!!(cached?.fingerprint===fingerprint&&cached?.ai);
+        row=applyAi(row,ai);
+      }catch(e){aiErrors.push({conversationId:id,error:e.message})}}await this.store.saveDailyItem(jobId,id,row)}const processed=to,statusDone=processed>=ids.length;await this.store.saveDailyJob(jobId,{processed,aiUsedCount:aiUsed,aiErrors,status:statusDone?'finalizing':'processing',updatedAt:new Date().toISOString()});if(statusDone){const report=await this.finalize(jobId);return{job:await this.store.getDailyJob(jobId),report}}return{job:{...job,processed,aiUsedCount:aiUsed,status:'processing'},report:null}}
   async finalize(jobId){const job=await this.store.getDailyJob(jobId),rowsAll=await this.store.listDailyItems(jobId,1000),rows=rowsAll.filter(r=>!r.excludedFromReport).map(r=>({...r,hubUrl:r.hubUrl||hubUrl(r.hubConversationId||r.conversationId)})),bySeller=summary(rows),dayRange=localDayRange(job.date),leadTo=new Date(dayRange.fullTo.getTime()+1),[activeDeals,trackedDeals,hunterRows,events,leadQualityDeals]=await Promise.all([this.store.listActiveDeals(20000),this.store.listTrackedDeals(20000),this.store.listHunterDay(job.date,10000),this.store.listEventsRange(dayRange.fullFrom.toISOString(),dayRange.fullTo.toISOString(),2000),this.crm.listDealsCreatedInRange({from:dayRange.fullFrom,to:leadTo,limit:10000}).catch(e=>({__error:e.message}))]);const hs=new Set(hunterRows.map(x=>norm(x.row?.sellerId||x.row?.userId||x.row?.owner||x.row?.seller||x.row?.user||x.row?.email)).filter(Boolean));const ev={HORNO:0,GANADO:0,GANADO_FROM_AD:0};for(const e of events)if(Object.hasOwn(ev,e.type))ev[e.type]++;const leadQuality=aggregateLeadQuality(leadQualityDeals),leadQualityInsights=buildLeadQualityInsights(leadQualityDeals,rows);const report={id:`daily__${job.reportKey||job.date}`,reportType:'daily_gerencial_legacy_port',date:job.date,cutoffHour:job.endHour,generatedAt:new Date().toISOString(),businessHours:localDayRange(job.date,job.startHour,job.endHour).label,lateMinutes:job.lateMinutes,sourceJobId:jobId,rowsStorage:'dailyItems',rows,excludedCount:rowsAll.length-rows.length,bySeller,aiUsedCount:job.aiUsedCount||0,aiErrors:job.aiErrors||[],portfolio:aggregatePortfolio(activeDeals),followUps:aggregateFollowUps(trackedDeals),hunter:{total:hunterRows.length,sellers:hs.size},events:ev,leadQuality,leadQualityInsights,sourceReadOnly:true,legacyLogicPorted:true,guideVersion:'SCB_v1.0',openaiModel:this.openai?.model||null};report.text=managerText(report);report.html=html(report);await this.store.saveDailyReport(job.reportKey||job.date,report);await this.store.saveDailyJob(jobId,{status:'complete',completedAt:new Date().toISOString(),reportId:report.id});return report}
   async generate({date,startHour=9,endHour=17,forceAi=false,reportKey=null,reviewScope='guide_v1',sellerKey=null}={}){const start=await this.start({date,startHour,endHour,limit:500,forceAi,reportKey,reviewScope,sellerKey});let result;do{result=await this.process({jobId:start.jobId,batchSize:5})}while(result.job.status!=='complete');return result.report}
 }
@@ -236,4 +275,4 @@ function emailHtml(report){
   return `<!doctype html><html><body><table role="presentation" width="100%"><tr><td><h1>SUPERVISOR SCB — CIERRE GERENCIAL</h1><h2>RENDIMIENTO POR VENDEDOR</h2><table role="presentation"><tr><th>Vendedor</th><th>Chats</th><th>Sin respuesta</th><th>Tarde</th></tr>${rows}</table></td></tr></table></body></html>`;
 }
 
-module.exports={DailyGerencialService,analyzeConversation,analyzeDailyConversation:analyzeConversation,applyAi,needsAi,summary,aggregateLeadQuality,buildLeadQualityInsights,managerText,html,hubUrl,localDayRange,businessRange,telegramText,emailHtml,exclusionReason};
+module.exports={DailyGerencialService,analyzeConversation,analyzeDailyConversation:analyzeConversation,applyAi,needsAi,summary,aggregateLeadQuality,buildLeadQualityInsights,managerText,html,hubUrl,localDayRange,businessRange,telegramText,emailHtml,exclusionReason,stableAiFingerprint};

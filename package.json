@@ -1,8 +1,8 @@
 {
   "name": "mrapi-scb-supervisor",
-  "version": "0.13.33",
+  "version": "0.13.34",
   "private": true,
-  "description": "SUPERVISOR SCB V3 - fresh manual analysis and cache invalidation",
+  "description": "SUPERVISOR SCB V3 - cross-day conversation memory and deterministic temporal state",
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {

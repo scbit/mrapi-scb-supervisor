@@ -397,3 +397,11 @@ Objetivo de costo:
 - Automatic/manual base cache namespace was bumped to `guide_v1_product_context_v2_fresh`, invalidating stale v1 reports/reviews created before the Hub compatibility fixes.
 - Historical snapshots are preserved; only current-state generation stops trusting the obsolete cache namespace.
 - No scheduler, Telegram destination, CRM write, Hub write, or infrastructure changes.
+
+
+## v0.13.34 — CROSS-DAY CONVERSATION MEMORY
+- AI review cache is keyed by conversation + commercial evidence fingerprint, not by date/cutoff.
+- Identical messages/context reuse the exact prior AI review even when Generate Test refreshes source data.
+- New/changed messages or relevant conversation context invalidate the fingerprint and trigger a new AI review.
+- Time-sensitive operational conditions remain deterministic and are recalculated every run.
+- Memory persists across days; a date change alone does not force a new AI opinion.
